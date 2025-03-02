@@ -1,0 +1,104 @@
+﻿Setting Up Kubernetes API Server Monitoring in Datadog (GKE)
+1. Enable API Server Metrics in GKE
+    • Ensure Kubernetes API server metrics are exposed: 
+kubectl get --raw /metrics
+    • In GKE, enable monitoring.googleapis.com/kube-apiserver by modifying the monitoring configuration. 
+2. Install Datadog Agent in GKE
+    • Deploy Datadog Agent as a DaemonSet: 
+helm repo add datadog https://helm.datadoghq.com
+helm repo update
+helm install datadog-agent datadog/datadog --set datadog.apiKey=YOUR_API_KEY --set datadog.site="datadoghq.com"
+3. Verify Kubernetes API Monitoring
+    • Check API server metrics are collected: 
+datadog-agent status | grep kube_apiserver
+    • Ensure API response metrics are being collected: 
+kubectl get --raw /metrics | grep apiserver_request_duration_seconds
+4. Querying GKE API Server Metrics in Datadog
+    • Run an API request to Datadog metrics endpoint: 
+curl -X GET "https://api.datadoghq.com/api/v1/metrics" \
+     -H "DD-API-KEY: YOUR_API_KEY"
+5. DogStatsD Python Script for AdmissionReview HTTP Responses
+from flask import Flask, request, jsonify
+from datadog import DogStatsd
+import time
+
+app = Flask(__name__)
+statsd = DogStatsd(host="127.0.0.1", port=8125)
+
+@app.route("/validate", methods=["POST"])
+def validate():
+    start_time = time.time()
+    try:
+        admission_request = request.get_json()
+        admission_response = {"response": {"uid": admission_request["request"]["uid"], "allowed": True}}
+        response_code = 200
+    except Exception as e:
+        response_code = 500
+        admission_response = {"error": str(e)}
+    response_time = time.time() - start_time
+    statsd.increment("admissionreview.http_response_status", tags=[f"status_code:{response_code}"])
+    statsd.histogram("admissionreview.response_time", response_time)
+    return jsonify(admission_response), response_code
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
+6. Deploying Python Script in Kubernetes
+    • Create a Kubernetes Deployment: 
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admissionreview-metrics
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: admissionreview-metrics
+  template:
+    metadata:
+      labels:
+        app: admissionreview-metrics
+    spec:
+      containers:
+        - name: admissionreview-metrics
+          image: myrepo/admission-metrics:latest
+          ports:
+            - containerPort: 5000
+          env:
+            - name: DD_AGENT_HOST
+              value: "127.0.0.1"
+7. Verify Datadog Metrics
+    • Check if Datadog agent is receiving metrics: 
+datadog-agent status | grep admissionreview
+    • Query logs for debugging: 
+sudo journalctl -u datadog-agent -f | grep "admissionreview"
+8. Test API Server Response Metrics
+    • Send a test AdmissionReview request: 
+curl -X POST http://localhost:5000/validate -H "Content-Type: application/json" -d '{
+  "apiVersion": "admission.k8s.io/v1",
+  "kind": "AdmissionReview",
+  "request": {"uid": "1234", "object": {}}
+}'
+9. Create Datadog Dashboard
+    • Add Metrics: 
+        ◦ admissionreview.http_response_status 
+        ◦ admissionreview.response_time 
+    • Filter by status_code and set alerts on high response times. 
+10. Automate with Systemd (Linux Only)
+    • Create a systemd service file: 
+sudo nano /etc/systemd/system/admission-metrics.service
+    • Add: 
+[Unit]
+Description=Kubernetes Admission Controller Metrics Service
+After=network.target
+
+[Service]
+User=root
+ExecStart=/usr/bin/python3 /path/to/admissionreview_metrics.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+    • Start the service: 
+sudo systemctl enable admission-metrics
+sudo systemctl start admission-metrics
+
