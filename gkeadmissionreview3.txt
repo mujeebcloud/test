@@ -1,0 +1,76 @@
+﻿DogStatsD AdmissionReview Metrics Setup Guide
+1. Prerequisites
+    • Linux system with Python 3.8+ 
+    • Datadog Agent installed with DogStatsD enabled 
+    • Flask & Datadog Python SDK 
+2. Install Datadog Agent with DogStatsD
+DD_AGENT_MAJOR_VERSION=7 DD_API_KEY=YOUR_API_KEY DD_SITE="datadoghq.com" bash -c "$(curl -L https://s3.amazonaws.com/dd-agent/scripts/install_script.sh)"
+Enable DogStatsD in /etc/datadog-agent/datadog.yaml:
+use_dogstatsd: true
+dogstatsd_listen_address: "127.0.0.1"
+Restart Datadog Agent:
+sudo systemctl restart datadog-agent
+3. Install Python Dependencies
+pip install flask datadog
+4. Python Script for AdmissionReview Metrics
+from flask import Flask, request, jsonify
+from datadog import DogStatsd
+import time
+
+app = Flask(__name__)
+statsd = DogStatsd(host="127.0.0.1", port=8125)
+
+@app.route("/validate", methods=["POST"])
+def validate():
+    start_time = time.time()
+    try:
+        admission_request = request.get_json()
+        admission_response = {"response": {"uid": admission_request["request"]["uid"], "allowed": True}}
+        response_code = 200
+        statsd.increment("admissionreview.http_response_status", tags=[f"status_code:{response_code}"])
+    except Exception as e:
+        response_code = 500
+        statsd.increment("admissionreview.http_response_status", tags=["status_code:500"])
+        admission_response = {"error": str(e)}
+    statsd.histogram("admissionreview.response_time", time.time() - start_time)
+    return jsonify(admission_response), response_code
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
+5. Run the Script
+python admissionreview_metrics.py
+6. Verify Datadog Metrics
+datadog-agent status | grep admissionreview
+sudo journalctl -u datadog-agent -f | grep "admissionreview"
+7. Test AdmissionReview API
+curl -X POST http://localhost:5000/validate -H "Content-Type: application/json" -d '{"apiVersion": "admission.k8s.io/v1", "kind": "AdmissionReview", "request": {"uid": "1234", "object": {}}}'
+8. Deploy in Kubernetes
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admissionreview-metrics
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: admissionreview-metrics
+  template:
+    metadata:
+      labels:
+        app: admissionreview-metrics
+    spec:
+      containers:
+        - name: admissionreview-metrics
+          image: myrepo/admission-metrics:latest
+          ports:
+            - containerPort: 5000
+          env:
+            - name: DD_AGENT_HOST
+              value: "127.0.0.1"
+            - name: DD_DOGSTATSD_PORT
+              value: "8125"
+9. Create Datadog Dashboard
+    1. Metric: admissionreview.http_response_status 
+    2. Metric: admissionreview.response_time 
+    3. Filter by status_code 
+

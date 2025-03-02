@@ -1,0 +1,136 @@
+﻿Enabling and Monitoring AdmissionReview Metrics on a GKE Cluster
+1. Enable AdmissionReview Logs in GKE
+Google Kubernetes Engine (GKE) automatically logs AdmissionReview requests in Cloud Logging. You need to ensure logging is enabled and create log-based metrics.
+Step 1: Enable Cloud Logging for GKE
+If logging is not enabled, run:
+gcloud beta container clusters update YOUR_CLUSTER_NAME \
+    --logging=SYSTEM,WORKLOAD \
+    --monitoring=SYSTEM,WORKLOAD \
+    --project=YOUR_PROJECT_ID
+This ensures AdmissionReview webhook logs are captured.
+Step 2: Verify Logs Exist in Google Cloud Logging
+gcloud logging read 'resource.type="k8s_cluster" AND logName="projects/YOUR_PROJECT_ID/logs/kubernetes.io%2Fadmission"'
+If logs appear, AdmissionReview logging is enabled.
+
+2. Create Log-Based Metrics for AdmissionReview in Google Cloud
+To track latency, success rate, and failures, create log-based metrics.
+Step 3: Create Log-Based Metric for Response Time
+gcloud logging metrics create admissionreview_latency \
+    --description "AdmissionReview Webhook Response Time" \
+    --log-filter 'resource.type="k8s_cluster" AND logName="projects/YOUR_PROJECT_ID/logs/kubernetes.io%2Fadmission" AND jsonPayload.response.status.code'
+This tracks webhook response latency.
+Step 4: Create Log-Based Metric for Admission Decision
+gcloud logging metrics create admissionreview_decision \
+    --description "AdmissionReview Webhook Allowed/Denied Requests" \
+    --log-filter 'resource.type="k8s_cluster" AND logName="projects/YOUR_PROJECT_ID/logs/kubernetes.io%2Fadmission" AND jsonPayload.response.allowed'
+This tracks allowed vs. denied requests.
+
+3. Enable Prometheus Metrics for AdmissionReview
+GKE does not expose AdmissionReview metrics natively, but you can capture them using Prometheus.
+Step 5: Deploy Prometheus AdmissionReview Exporter
+Deploy a Prometheus exporter for AdmissionReview metrics:
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: admissionreview-monitor
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: my-admission-webhook
+  endpoints:
+    - port: https
+      path: /metrics
+      interval: 15s
+Expose AdmissionReview metrics in your webhook:
+Modify your webhook to export Prometheus metrics:
+from prometheus_client import start_http_server, Summary
+
+response_time = Summary('admissionreview_response_time', 'Response time of AdmissionReview requests')
+
+@response_time.time()
+def handle_request():
+    # Webhook logic here
+    pass
+Now Prometheus scrapes AdmissionReview response time.
+
+4. Forward AdmissionReview Metrics to Datadog
+Once you have Cloud Logging metrics or Prometheus metrics, forward them to Datadog.
+Step 6: Forward Log-Based Metrics to Datadog
+Export logs to Pub/Sub:
+gcloud logging sinks create admissionreview-metrics-sink pubsub.googleapis.com/projects/YOUR_PROJECT_ID/topics/YOUR_TOPIC
+Use Datadog Log Forwarding:
+    • In Datadog, create a GCP integration 
+    • Enable log ingestion from Pub/Sub 
+    • Use admissionreview.response_time in Datadog Metrics 
+
+Summary
+✅ Enable Cloud Logging for AdmissionReview
+✅ Create Log-Based Metrics in Google Cloud
+✅ Expose AdmissionReview Metrics in Prometheus
+✅ Forward AdmissionReview Metrics to Datadog
+
+
+{
+  "title": "AdmissionReview Metrics",
+  "widgets": [
+    {
+      "definition": {
+        "type": "timeseries",
+        "requests": [
+          {
+            "q": "avg:kubernetes.admission.response_time{*} by {kube_namespace}",
+            "display_type": "line",
+            "style": {
+              "palette": "cool",
+              "line_type": "solid",
+              "line_width": "normal"
+            }
+          }
+        ],
+        "title": "AdmissionReview Response Time (ms)"
+      }
+    },
+    {
+      "definition": {
+        "type": "query_value",
+        "requests": [
+          {
+            "q": "count:kubernetes.admission.decision{allowed:true}",
+            "aggregator": "sum"
+          }
+        ],
+        "title": "Allowed Requests",
+        "autoscale": true
+      }
+    },
+    {
+      "definition": {
+        "type": "query_value",
+        "requests": [
+          {
+            "q": "count:kubernetes.admission.decision{allowed:false}",
+            "aggregator": "sum"
+          }
+        ],
+        "title": "Denied Requests",
+        "autoscale": true
+      }
+    },
+    {
+      "definition": {
+        "type": "table",
+        "requests": [
+          {
+            "q": "top(kubernetes.admission.response_code, 10, 'sum')",
+            "aggregator": "sum",
+            "conditional_formats": []
+          }
+        ],
+        "title": "AdmissionReview Response Codes"
+      }
+    }
+  ],
+  "layout_type": "ordered"
+}

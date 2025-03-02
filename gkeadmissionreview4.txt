@@ -1,0 +1,59 @@
+﻿Installing & Running the Admission Controller with DogStatsD on a Linux System
+1. Install Dependencies
+sudo apt update && sudo apt install -y python3 python3-pip
+pip3 install flask datadog
+2. Create the Admission Controller Script
+from flask import Flask, request, jsonify
+from datadog import DogStatsd
+import time
+
+app = Flask(__name__)
+statsd = DogStatsd(host="127.0.0.1", port=8125)
+
+@app.route("/validate", methods=["POST"])
+def validate():
+    start_time = time.time()
+    try:
+        admission_request = request.get_json()
+        admission_response = {"response": {"uid": admission_request["request"]["uid"], "allowed": True}}
+        response_code = 200
+    except Exception as e:
+        response_code = 500
+        admission_response = {"error": str(e)}
+    response_time = time.time() - start_time
+    statsd.increment("admissionreview.http_response_status", tags=[f"status_code:{response_code}"])
+    statsd.histogram("admissionreview.response_time", response_time)
+    return jsonify(admission_response), response_code
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
+    • Save this as admission_controller.py. 
+3. Create a Systemd Service
+sudo nano /etc/systemd/system/admission-metrics.service
+Add the following content:
+[Unit]
+Description=Kubernetes Admission Controller Metrics Service
+After=network.target
+
+[Service]
+User=root
+ExecStart=/usr/bin/python3 /path/to/admission_controller.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+    • Start the service: 
+sudo systemctl enable admission-metrics
+sudo systemctl start admission-metrics
+4. Verify the Setup
+    • Check the service status: 
+sudo systemctl status admission-metrics
+    • Send a test request: 
+curl -X POST http://localhost:5000/validate -H "Content-Type: application/json" -d '{
+  "apiVersion": "admission.k8s.io/v1",
+  "kind": "AdmissionReview",
+  "request": {"uid": "1234", "object": {}}
+}'
+    • Check Datadog metrics: 
+datadog-agent status | grep admissionreview
+
