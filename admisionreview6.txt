@@ -1,0 +1,70 @@
+﻿Installing & Running the Admission Controller with DogStatsD on a Linux System
+1. Install Dependencies
+sudo apt update && sudo apt install -y python3 python3-pip
+pip3 install flask datadog
+2. Install and Configure Datadog Agent
+    • Install the Datadog Agent: 
+DD_AGENT_MAJOR_VERSION=7 DD_API_KEY=YOUR_API_KEY DD_SITE="datadoghq.com" \
+    bash -c "$(curl -L https://s3.amazonaws.com/dd-agent/scripts/install_script.sh)"
+    • Enable DogStatsD and configure it to listen for custom metrics: 
+sudo sh -c 'echo "use_dogstatsd: true" >> /etc/datadog-agent/datadog.yaml'
+    • Restart the Datadog Agent: 
+sudo systemctl restart datadog-agent
+    • Verify the Datadog Agent status: 
+datadog-agent status | grep dogstatsd
+3. Create the Admission Controller Script
+from flask import Flask, request, jsonify
+from datadog import DogStatsd
+import time
+
+app = Flask(__name__)
+statsd = DogStatsd(host="127.0.0.1", port=8125)
+
+@app.route("/validate", methods=["POST"])
+def validate():
+    start_time = time.time()
+    try:
+        admission_request = request.get_json()
+        uid = admission_request["request"]["uid"]
+        operation = admission_request["request"].get("operation", "UNKNOWN")
+        kind = admission_request["request"].get("kind", {}).get("kind", "UNKNOWN")
+        namespace = admission_request["request"].get("namespace", "UNKNOWN")
+        allowed = True
+        response_code = 200
+        admission_response = {"response": {"uid": uid, "allowed": allowed}}
+    except Exception as e:
+        response_code = 500
+        admission_response = {"error": str(e)}
+    
+    response_time = time.time() - start_time
+    statsd.increment("admissionreview.http_response_status", tags=[f"status_code:{response_code}"])
+    statsd.histogram("admissionreview.response_time", response_time)
+    statsd.increment("admissionreview.operations", tags=[f"operation:{operation}", f"kind:{kind}", f"namespace:{namespace}"])
+    return jsonify(admission_response), response_code
+
+if __name__ == "__main__":
+    app.run(host="127.0.0.1", port=5000)
+    • Save this as admission_controller.py. 
+4. Run the Admission Controller Locally
+python3 admission_controller.py
+5. Send Multiple Test Requests via cURL or Postman
+    • Test Create Pod Request: 
+curl -X POST http://127.0.0.1:5000/validate -H "Content-Type: application/json" -d '{
+  "apiVersion": "admission.k8s.io/v1",
+  "kind": "AdmissionReview",
+  "request": {"uid": "1234", "operation": "CREATE", "kind": {"kind": "Pod"}, "namespace": "default"}
+}'
+    • Test Delete Deployment Request: 
+curl -X POST http://127.0.0.1:5000/validate -H "Content-Type: application/json" -d '{
+  "apiVersion": "admission.k8s.io/v1",
+  "kind": "AdmissionReview",
+  "request": {"uid": "5678", "operation": "DELETE", "kind": {"kind": "Deployment"}, "namespace": "kube-system"}
+}'
+    • Test Invalid Request: 
+curl -X POST http://127.0.0.1:5000/validate -H "Content-Type: application/json" -d '{}'
+6. Check Datadog Metrics
+    • Verify recorded metrics in Datadog: 
+datadog-agent status | grep admissionreview
+    • Validate DogStatsD is receiving metrics: 
+echo -n "admissionreview.response_time:0.02|h" | nc -u -w1 127.0.0.1 8125
+
