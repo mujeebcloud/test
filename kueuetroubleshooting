@@ -1,0 +1,301 @@
+Troubleshooting Kueue workflows involves identifying and resolving issues related to job queuing, resource allocation, scheduling, and integration with Kubernetes. Below is a detailed list of common Kueue workflow troubleshooting scenarios along with their causes and solutions:
+
+1. Jobs Stuck in the Queue
+Symptoms:
+Jobs remain in the Pending state indefinitely.
+
+No progress or resource allocation for the jobs.
+
+Possible Causes:
+Insufficient Resources:
+
+The cluster does not have enough resources (CPU, memory, GPUs) to schedule the jobs.
+
+Resource Quotas:
+
+Resource quotas or limits are preventing the jobs from being scheduled.
+
+Priority Misconfiguration:
+
+Jobs have low priority, and higher-priority jobs are consuming all available resources.
+
+Cluster Autoscaler Issues:
+
+The cluster autoscaler is not provisioning additional nodes to meet resource demands.
+
+Troubleshooting Steps:
+Check resource availability:
+
+bash
+Copy
+kubectl describe node
+Verify resource quotas:
+
+bash
+Copy
+kubectl describe quota
+Check job priorities:
+
+bash
+Copy
+kubectl get kueuequeue
+Verify cluster autoscaler logs:
+
+bash
+Copy
+kubectl logs -n kube-system -l app=cluster-autoscaler
+Solutions:
+Increase cluster resources (e.g., add more nodes or GPUs).
+
+Adjust resource quotas or limits.
+
+Increase job priority or adjust Kueue's priority configuration.
+
+Ensure the cluster autoscaler is configured correctly.
+
+2. Jobs Failing Immediately
+Symptoms:
+Jobs fail immediately after being submitted.
+
+Error messages in the job logs.
+
+Possible Causes:
+Invalid Job Configuration:
+
+Incorrect resource requests, image names, or command arguments.
+
+Permission Issues:
+
+The job does not have the necessary permissions to access resources (e.g., PersistentVolumes, Secrets).
+
+Image Pull Errors:
+
+The container image cannot be pulled (e.g., invalid image name or private registry credentials missing).
+
+Resource Limits Exceeded:
+
+The job exceeds resource limits or quotas.
+
+Troubleshooting Steps:
+Check job logs:
+
+bash
+Copy
+kubectl logs <job-pod-name>
+Describe the job:
+
+bash
+Copy
+kubectl describe job <job-name>
+Verify resource requests and limits:
+
+bash
+Copy
+kubectl get pod <job-pod-name> -o yaml
+Check image pull errors:
+
+bash
+Copy
+kubectl describe pod <job-pod-name>
+Solutions:
+Fix the job configuration (e.g., correct resource requests, image names, or commands).
+
+Add necessary permissions (e.g., RBAC roles, Secrets, or PersistentVolumeClaims).
+
+Ensure the container image is accessible and valid.
+
+Adjust resource limits or quotas.
+
+3. Jobs Not Being Scheduled
+Symptoms:
+Jobs are not being scheduled even though resources are available.
+
+No events or errors in the job logs.
+
+Possible Causes:
+Kueue Configuration Issues:
+
+Misconfigured Kueue queues or priorities.
+
+Node Selector or Affinity Rules:
+
+Jobs have node selectors or affinity rules that cannot be satisfied.
+
+Taints and Tolerations:
+
+Nodes have taints that the jobs do not tolerate.
+
+Kueue Controller Issues:
+
+The Kueue controller is not running or is misconfigured.
+
+Troubleshooting Steps:
+Check Kueue queue configuration:
+
+bash
+Copy
+kubectl get kueuequeue
+Verify node selectors and affinity rules:
+
+bash
+Copy
+kubectl get pod <job-pod-name> -o yaml
+Check node taints and tolerations:
+
+bash
+Copy
+kubectl describe node <node-name>
+Verify Kueue controller logs:
+
+bash
+Copy
+kubectl logs -n kueue-system -l app=kueue-controller
+Solutions:
+Fix Kueue queue or priority configuration.
+
+Adjust node selectors, affinity rules, or tolerations.
+
+Ensure the Kueue controller is running and configured correctly.
+
+4. Jobs Timing Out
+Symptoms:
+Jobs are stuck in the Running state and eventually time out.
+
+No progress or output from the jobs.
+
+Possible Causes:
+Resource Starvation:
+
+Jobs are not getting enough resources to complete.
+
+Deadlocks:
+
+Jobs are waiting for resources that are held by other jobs.
+
+Job Configuration Issues:
+
+Jobs have incorrect timeouts or retry policies.
+
+Cluster Issues:
+
+Nodes are unhealthy or experiencing network issues.
+
+Troubleshooting Steps:
+Check job logs:
+
+bash
+Copy
+kubectl logs <job-pod-name>
+Describe the job:
+
+bash
+Copy
+kubectl describe job <job-name>
+Verify resource usage:
+
+bash
+Copy
+kubectl top pod <job-pod-name>
+Check node health:
+
+bash
+Copy
+kubectl get nodes
+Solutions:
+Increase resource requests or limits for the jobs.
+
+Adjust job timeouts or retry policies.
+
+Resolve deadlocks by prioritizing or rescheduling jobs.
+
+Fix node or cluster issues.
+
+5. Kueue Controller Not Working
+Symptoms:
+Jobs are not being queued or scheduled.
+
+No logs or events from the Kueue controller.
+
+Possible Causes:
+Controller Crash:
+
+The Kueue controller has crashed or is not running.
+
+Configuration Errors:
+
+Misconfigured Kueue controller settings.
+
+RBAC Issues:
+
+The Kueue controller does not have the necessary permissions.
+
+Troubleshooting Steps:
+Check Kueue controller status:
+
+bash
+Copy
+kubectl get pods -n kueue-system
+Verify Kueue controller logs:
+
+bash
+Copy
+kubectl logs -n kueue-system -l app=kueue-controller
+Check RBAC permissions:
+
+bash
+Copy
+kubectl describe clusterrole kueue-controller
+Solutions:
+Restart the Kueue controller:
+
+bash
+Copy
+kubectl delete pod -n kueue-system -l app=kueue-controller
+Fix configuration errors in the Kueue controller.
+
+Ensure the Kueue controller has the necessary RBAC permissions.
+
+6. Jobs Not Respecting Priorities
+Symptoms:
+Higher-priority jobs are not being scheduled before lower-priority jobs.
+
+Jobs are not being processed in the expected order.
+
+Possible Causes:
+Priority Misconfiguration:
+
+Priorities are not configured correctly in Kueue.
+
+Resource Contention:
+
+Resources are being held by lower-priority jobs.
+
+Kueue Queue Issues:
+
+Queues are not configured to respect priorities.
+
+Troubleshooting Steps:
+Check Kueue queue priorities:
+
+bash
+Copy
+kubectl get kueuequeue
+Verify job priorities:
+
+bash
+Copy
+kubectl get job <job-name> -o yaml
+Check resource usage:
+
+bash
+Copy
+kubectl top nodes
+Solutions:
+Adjust Kueue queue priorities.
+
+Preempt or reschedule lower-priority jobs.
+
+Ensure Kueue queues are configured correctly.
+
+Conclusion
+These troubleshooting scenarios cover the most common issues you may encounter with Kueue workflows. By following the steps and solutions provided, you can resolve issues related to job queuing, resource allocation, scheduling, and Kueue configuration.
