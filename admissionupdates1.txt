@@ -1,0 +1,48 @@
+**Fix Missing `/etc/datadog-agent/auth_token` in Datadog Agent**
+
+### **1. Check Datadog Agent Logs for Errors**
+```sh
+sudo journalctl -u datadog-agent --no-pager | grep "auth_token"
+```
+This will help identify if the authentication token is failing to generate.
+
+### **2. Ensure Correct Permissions on `/etc/datadog-agent`**
+```sh
+sudo chown -R dd-agent:dd-agent /etc/datadog-agent/
+sudo chmod -R 750 /etc/datadog-agent/
+```
+
+### **3. Restart the Agent**
+```sh
+sudo systemctl restart datadog-agent
+```
+Check the status to see if the issue persists:
+```sh
+sudo datadog-agent status
+```
+
+### **4. Manually Delete and Recreate the Authentication Token File**
+If the file `/etc/datadog-agent/auth_token` is missing or corrupted, try:
+```sh
+sudo rm -f /etc/datadog-agent/auth_token
+sudo systemctl restart datadog-agent
+```
+The agent should regenerate the token automatically.
+
+### **5. Reinstall the Datadog Agent (Last Resort)**
+If the above steps don't work, reinstall the agent:
+```sh
+sudo apt remove datadog-agent -y
+sudo apt update
+sudo apt install datadog-agent -y
+```
+Then restart:
+```sh
+sudo systemctl restart datadog-agent
+```
+
+After performing these steps, check if the Datadog Agent is running correctly:
+```sh
+sudo datadog-agent status
+```
+

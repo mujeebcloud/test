@@ -1,0 +1,159 @@
+Kubernetes Admission Webhook with Flask, HTTPS, and Datadog Integration
+This guide provides instructions to set up a Kubernetes Admission Webhook using Flask, served over HTTPS, and integrated with Datadog for monitoring.
+
+Prerequisites
+Install Python packages:
+
+bash
+Copy
+pip install flask datadog
+Install the Datadog agent on your Linux system. Follow the official Datadog installation guide.
+
+Steps
+Generate SSL Certificates:
+Generate a self-signed certificate for HTTPS:
+
+bash
+Copy
+openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt -days 365 -nodes -subj "/CN=admission-webhook.default.svc"
+Create the Flask App:
+Save the following script as admission_webhook.py:
+
+python
+Copy
+from flask import Flask, request, jsonify
+from datadog import initialize, statsd, api
+import logging
+
+app = Flask(__name__)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Initialize Datadog
+initialize(api_key='your_datadog_api_key', app_key='your_datadog_app_key')
+
+# Admission Webhook Endpoint
+@app.route('/validate', methods=['POST'])
+def validate():
+    logger.info("Received Admission Review Request")
+    statsd.increment('admission_webhook.requests_received')
+
+    admission_review = request.json
+    request_uid = admission_review.get("request", {}).get("uid")
+    object_kind = admission_review.get("request", {}).get("kind", {}).get("kind")
+    object_name = admission_review.get("request", {}).get("name")
+
+    logger.info(f"Processing request UID: {request_uid}, Kind: {object_kind}, Name: {object_name}")
+
+    allowed = True
+    message = "Validation passed"
+    if object_kind == "Pod" and "forbidden" in object_name.lower():
+        allowed = False
+        message = "Pod name contains forbidden keyword"
+
+    response = {
+        "apiVersion": "admission.k8s.io/v1",
+        "kind": "AdmissionReview",
+        "response": {
+            "uid": request_uid,
+            "allowed": allowed,
+            "status": {"message": message}
+        }
+    }
+
+    logger.info(f"Sending Admission Review Response: {response}")
+    statsd.increment('admission_webhook.responses_sent')
+
+    return jsonify(response)
+
+# Health Check Endpoint
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({"status": "healthy"})
+
+if __name__ == '__main__':
+    ssl_cert = 'server.crt'
+    ssl_key = 'server.key'
+    app.run(host='0.0.0.0', port=5000, ssl_context=(ssl_cert, ssl_key))
+Run the Flask App:
+Start the Flask app with HTTPS:
+
+bash
+Copy
+python admission_webhook.py
+Deploy the Webhook in Kubernetes:
+Create a ValidatingWebhookConfiguration in Kubernetes:
+
+yaml
+Copy
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: admission-webhook
+webhooks:
+  - name: admission-webhook.default.svc
+    clientConfig:
+      caBundle: <base64-encoded-server.crt>
+      url: https://<your-server-ip>:5000/validate
+    rules:
+      - operations: ["CREATE", "UPDATE"]
+        apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods"]
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    timeoutSeconds: 5
+Test the Webhook:
+Create a Pod in Kubernetes:
+
+yaml
+Copy
+apiVersion: v1
+kind: Pod
+metadata:
+  name: forbidden-pod
+spec:
+  containers:
+    - name: nginx
+      image: nginx
+Set Up Datadog for Metrics and Logs:
+
+Metrics:
+
+Go to Metrics > Explorer in the Datadog console.
+
+Search for admission_webhook.requests_received and admission_webhook.responses_sent.
+
+Logs:
+
+Enable log collection in the Datadog agent configuration:
+
+yaml
+Copy
+logs_enabled: true
+Add a log configuration file for your Flask app (e.g., /etc/datadog-agent/conf.d/python.d/conf.yaml):
+
+yaml
+Copy
+logs:
+  - type: file
+    path: /path/to/your/flask/app.log
+    service: admission-webhook
+    source: python
+Restart the Datadog agent:
+
+bash
+Copy
+sudo systemctl restart datadog-agent
+View logs in Logs > Explorer in the Datadog console.
+
+Notes
+Replace your_datadog_api_key and your_datadog_app_key with your actual Datadog API and App keys.
+
+For production, use a properly signed certificate instead of a self-signed one.
+
+Ensure the Datadog agent is configured to collect logs and metrics from your Flask app.
+
+This text file summarizes the entire process for setting up a Kubernetes Admission Webhook with Flask, HTTPS, and Datadog integration. Save it for future reference!

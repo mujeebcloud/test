@@ -1,0 +1,219 @@
+Admission Webhook with Flask and Datadog Integration
+This guide provides a detailed explanation of a Python script that sets up a Kubernetes Admission Webhook using Flask, served over HTTPS, and integrated with Datadog for monitoring.
+
+Script Overview
+The script consists of two parts:
+
+admission_webhook.py: Defines a function to set up the admission webhook.
+
+main_script.py: Demonstrates how to use the function in a larger application.
+
+Script: admission_webhook.py
+python
+Copy
+from flask import Flask, request, jsonify
+from datadog import initialize, statsd
+import logging
+import time
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def setup_admission_webhook():
+    """
+    Sets up and returns a Flask app configured as an admission webhook.
+    """
+    app = Flask(__name__)
+
+    # Initialize Datadog
+    initialize(statsd_host="localhost", statsd_port=8125)  # DogStatsD default host and port
+
+    @app.route('/validate', methods=['POST'])
+    def validate():
+        # Start timer for latency measurement
+        start_time = time.time()
+
+        # Log the incoming request
+        logger.info("Received Admission Review Request")
+        statsd.increment('admission_webhook.requests_received')  # Increment request counter
+
+        # Parse the AdmissionReview request
+        admission_review = request.json
+        request_uid = admission_review.get("request", {}).get("uid")
+        object_kind = admission_review.get("request", {}).get("kind", {}).get("kind")
+        object_name = admission_review.get("request", {}).get("name")
+
+        logger.info(f"Processing request UID: {request_uid}, Kind: {object_kind}, Name: {object_name}")
+
+        # Simulate validation logic
+        allowed = True
+        message = "Validation passed"
+        if object_kind == "Pod" and "forbidden" in object_name.lower():
+            allowed = False
+            message = "Pod name contains forbidden keyword"
+
+        # Prepare AdmissionReview response
+        response = {
+            "apiVersion": "admission.k8s.io/v1",
+            "kind": "AdmissionReview",
+            "response": {
+                "uid": request_uid,
+                "allowed": allowed,
+                "status": {"message": message}
+            }
+        }
+
+        # Log the response
+        logger.info(f"Sending Admission Review Response: {response}")
+        statsd.increment('admission_webhook.responses_sent')  # Increment response counter
+
+        # Calculate latency
+        latency = time.time() - start_time
+        statsd.histogram('admission_webhook.latency_seconds', latency)  # Send latency metric
+
+        # Send response status metric
+        if allowed:
+            statsd.increment('admission_webhook.responses.allowed')
+        else:
+            statsd.increment('admission_webhook.responses.denied')
+
+        return jsonify(response)
+
+    @app.route('/health', methods=['GET'])
+    def health():
+        return jsonify({"status": "healthy"})
+
+    return app
+
+if __name__ == '__main__':
+    # Create the Flask app
+    app = setup_admission_webhook()
+
+    # Start the Flask app with HTTPS
+    app.run(host='0.0.0.0', port=5000, ssl_context=('server.crt', 'server.key'))
+Main Script: main_script.py
+python
+Copy
+from admission_webhook import setup_admission_webhook
+
+def main():
+    # Set up the admission webhook
+    app = setup_admission_webhook()
+
+    # Start the Flask app with HTTPS
+    print("Starting admission webhook server...")
+    app.run(host='0.0.0.0', port=5000, ssl_context=('server.crt', 'server.key'))
+
+if __name__ == '__main__':
+    main()
+Line-by-Line Explanation
+admission_webhook.py
+Imports:
+
+Flask, request, jsonify: For creating the web server and handling HTTP requests/responses.
+
+initialize, statsd: For sending metrics to Datadog.
+
+logging: For logging messages.
+
+time: For measuring request processing latency.
+
+Logging Configuration:
+
+Set up logging to log messages at the INFO level.
+
+setup_admission_webhook Function:
+
+Creates a Flask app and configures it as an admission webhook.
+
+Initializes Datadog to send metrics to DogStatsD.
+
+/validate Route:
+
+Handles incoming HTTP POST requests.
+
+Logs the request and increments the admission_webhook.requests_received counter.
+
+Parses the request and performs validation logic.
+
+Constructs and logs the response, increments the admission_webhook.responses_sent counter, and sends latency and response status metrics to Datadog.
+
+/health Route:
+
+Handles health checks and returns a JSON response indicating the service is healthy.
+
+Running the Flask App:
+
+Starts the Flask app with HTTPS using the provided SSL certificate and key.
+
+main_script.py
+Imports:
+
+Imports the setup_admission_webhook function from admission_webhook.py.
+
+main Function:
+
+Sets up the admission webhook and starts the Flask app with HTTPS.
+
+Running the Script:
+
+Calls the main function when the script is executed.
+
+How to Use
+Install Dependencies:
+
+bash
+Copy
+pip install flask datadog
+Generate SSL Certificates:
+
+bash
+Copy
+openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt -days 365 -nodes -subj "/CN=admission-webhook.default.svc"
+Run the Script:
+
+bash
+Copy
+python main_script.py
+Deploy in Kubernetes:
+
+Deploy the Flask app as a Kubernetes Deployment and Service.
+
+Configure the ValidatingWebhookConfiguration to point to the service.
+
+Monitor in Datadog:
+
+View metrics in Metrics > Explorer.
+
+Create dashboards and alerts for the custom metrics.
+
+Metrics Sent to Datadog
+Counters:
+
+admission_webhook.requests_received: Total requests received.
+
+admission_webhook.responses_sent: Total responses sent.
+
+admission_webhook.responses.allowed: Total allowed responses.
+
+admission_webhook.responses.denied: Total denied responses.
+
+Histogram:
+
+admission_webhook.latency_seconds: Request processing latency.
+
+Conclusion
+This script provides a modular and reusable implementation of a Kubernetes Admission Webhook with Flask, HTTPS, and Datadog integration. It can be easily integrated into larger applications or workflows. Save this guide as README.txt for future reference.
+
+Steps to Save as a Text File
+Copy the entire content above.
+
+Open a text editor (e.g., Notepad, VS Code, or any other).
+
+Paste the content into the editor.
+
+Save the file with a .txt extension, e.g., admission_webhook_guide.txt.
+
+Let me know if you need further assistance!
+
