@@ -49,4 +49,51 @@ Kueue is a Kubernetes-native job queueing system designed to manage batch worklo
 
 By integrating Kueue into your GKE environment, you can effectively manage and optimize the execution of diverse workloads, ensuring efficient resource utilization and adherence to organizational policies.
 
+---
+
+### **Troubleshooting Common Kueue Scenarios**
+
+1. **Jobs Not Getting Admitted**
+   - Check if the queue has sufficient resources allocated.
+   - Verify if `ResourceQuota` limits are not exceeded.
+   - Ensure the job specification matches available `ResourceFlavor` definitions.
+   - Inspect Kueue controller logs for errors: `kubectl logs -l app=kueue-controller -n kueue-system`.
+
+2. **Jobs Stuck in Suspended State**
+   - Confirm that the queue has available quota and capacity.
+   - Ensure that no other higher-priority jobs are blocking execution.
+   - Check for misconfigurations in `Queue` or `ResourceFlavor` definitions.
+
+3. **Queue Not Processing Jobs**
+   - Ensure the queue is correctly associated with a `ResourceQuota`.
+   - Verify that Kueue is running and healthy using `kubectl get pods -n kueue-system`.
+   - Restart the Kueue controller if needed: `kubectl rollout restart deployment kueue-controller -n kueue-system`.
+
+4. **ResourceQuota Exhaustion**
+   - List current quota allocations: `kubectl get resourcequotas -A`.
+   - Increase quota limits if required using `kubectl edit resourcequota <quota-name>`.
+   - Check for any unused or outdated quota reservations.
+
+5. **High Job Latency**
+   - Verify cluster resource utilization to ensure no overloading.
+   - Adjust queue priority settings to give preference to critical jobs.
+   - Consider scaling up worker nodes if resources are insufficient.
+
+6. **Kueue Controller Crash or Not Running**
+   - Check logs for errors: `kubectl logs -l app=kueue-controller -n kueue-system`.
+   - Restart the controller: `kubectl rollout restart deployment kueue-controller -n kueue-system`.
+   - Ensure all necessary CRDs are installed: `kubectl get crds | grep kueue`.
+
+7. **Jobs Consuming More Resources Than Allocated**
+   - Define stricter resource limits within the `Queue` configuration.
+   - Monitor running jobs using `kubectl describe pod <pod-name>`.
+   - Implement proper resource requests and limits in job definitions.
+
+8. **Queue Prioritization Issues**
+   - Ensure jobs are submitted with the correct priority class.
+   - Review and adjust priority policies within the queue configuration.
+   - Check whether other jobs are monopolizing resources.
+
+By addressing these common issues, you can ensure smooth operation and efficiency of Kueue in your GKE cluster.
+
 
