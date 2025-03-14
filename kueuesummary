@@ -1,0 +1,52 @@
+**Kueue Workflow in Google Kubernetes Engine (GKE)**
+
+Kueue is a Kubernetes-native job queueing system designed to manage batch workloads, including high-performance computing (HPC) and AI/ML applications, within a Kubernetes cluster. It effectively handles job scheduling, resource allocation, and quota management, ensuring efficient utilization of cluster resources.
+
+### **Kueue Workflow in GKE**
+
+1. **Installation:**
+   - Deploy Kueue controllers and custom resource definitions (CRDs) in your GKE cluster. This setup enables Kueue to manage job scheduling and resource quotas effectively.
+
+2. **Defining Resource Flavors:**
+   - Create `ResourceFlavor` objects to specify different classes of resources (e.g., high-memory, GPU-equipped nodes). These definitions allow jobs to request specific resource types based on their requirements.
+
+3. **Configuring Queues:**
+   - Set up `Queue` objects to categorize and prioritize jobs. Each queue can be associated with specific resource quotas and scheduling policies, enabling fine-grained control over job execution.
+
+4. **Submitting Jobs:**
+   - Submit jobs in a suspended state, specifying the target queue and resource requirements. Kueue evaluates the job's needs against available resources and queue policies before admitting it for execution.
+
+5. **Quota Management:**
+   - Define `ResourceQuota` objects to limit resource consumption per namespace or across multiple namespaces. Kueue ensures that jobs adhere to these quotas, preventing resource contention and promoting fair usage.
+
+6. **Job Admission and Execution:**
+   - Kueue admits jobs based on resource availability, queue policies, and defined quotas. Once admitted, jobs transition from the suspended state to active execution, with Kueue monitoring their progress and resource usage.
+
+---
+
+### **Use Cases for Kueue**
+
+- **Batch Processing:**
+  - Manage large-scale data processing tasks that can be executed in parallel, optimizing resource utilization and throughput.
+
+- **High-Performance Computing (HPC):**
+  - Schedule and manage computationally intensive tasks, such as simulations or scientific computations, ensuring efficient resource allocation.
+
+- **AI/ML Workloads:**
+  - Handle training and inference jobs for machine learning models, particularly those requiring specialized resources like GPUs.
+
+- **Resource-Constrained Environments:**
+  - Enforce resource quotas and prioritize critical jobs in environments with limited resources, ensuring fair distribution and preventing resource exhaustion.
+
+- **Multi-Tenant Clusters:**
+  - Isolate workloads from different teams or projects within a shared cluster, maintaining resource boundaries and preventing interference.
+
+- **Priority Scheduling:**
+  - Assign priorities to jobs, ensuring that high-priority tasks are scheduled and executed before lower-priority ones.
+
+- **Gang Scheduling:**
+  - Coordinate the simultaneous scheduling of related tasks that must run together, such as parallel computations in HPC or distributed training in AI/ML workloads.
+
+By integrating Kueue into your GKE environment, you can effectively manage and optimize the execution of diverse workloads, ensuring efficient resource utilization and adherence to organizational policies.
+
+
