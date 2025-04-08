@@ -1,0 +1,475 @@
+Google Kubernetes Engine (GKE) Troubleshooting Guide  
+1. Pods Are Not Scheduling  
+
+Issue Description: 
+Pods remain in the Pending state and are not scheduled on nodes. 
+
+Common Causes:  
+
+    Insufficient resources (CPU, memory) in the cluster.
+    Taints and tolerations misconfigured.
+    Node selectors or affinity rules preventing scheduling.
+     
+
+Troubleshooting Steps:  
+
+    Check Resource Availability: 
+    bash
+     
+
+ 
+1
+kubectl describe nodes
+ 
+ 
+
+Look for resource usage and ensure sufficient CPU/memory is available. 
+
+Verify Pod Resource Requests: 
+bash
+ 
+ 
+1
+kubectl describe pod <POD_NAME>
+ 
+ 
+
+Ensure the pod's resource requests/limits are within node capacity. 
+
+Check Taints and Tolerations: 
+bash
+ 
+ 
+1
+kubectl get nodes -o json | jq '.items[].spec.taints'
+ 
+ 
+
+Add tolerations to the pod spec if necessary. 
+
+Inspect Node Selectors and Affinity Rules: 
+bash
+ 
+ 
+1
+kubectl describe pod <POD_NAME>
+ 
+ 
+
+Ensure the pod's node selectors or affinity rules match available nodes. 
+
+Scale the Cluster:
+If resources are insufficient, resize the node pool: 
+bash
+ 
+
+     
+    1
+    gcloud container clusters resize <CLUSTER_NAME> --node-pool=<POOL_NAME> --num-nodes=<NEW_SIZE>
+     
+     
+     
+
+2. Pods Are Crashing or Restarting Frequently  
+
+Issue Description: 
+Pods crash with errors like CrashLoopBackOff or restart repeatedly. 
+
+Common Causes:  
+
+    Application bugs or misconfigurations.
+    Missing or incorrect environment variables.
+    Insufficient resources causing OOM (Out of Memory) errors.
+     
+
+Troubleshooting Steps:  
+
+    Check Pod Logs: 
+    bash
+     
+
+ 
+1
+kubectl logs <POD_NAME>
+ 
+ 
+
+Look for application-specific errors. 
+
+Describe the Pod: 
+bash
+ 
+ 
+1
+kubectl describe pod <POD_NAME>
+ 
+ 
+
+Check events and conditions for clues. 
+
+Inspect Resource Usage: 
+bash
+ 
+ 
+1
+kubectl top pods
+ 
+ 
+
+Ensure the pod has sufficient CPU/memory. 
+
+Debug Locally:
+Run the container locally to test its behavior: 
+bash
+ 
+
+     
+    1
+    docker run <IMAGE_NAME>
+     
+     
+
+    Fix Configuration Issues:
+    Update the deployment YAML with correct environment variables, resource limits, etc. 
+     
+
+3. Services Are Unreachable  
+
+Issue Description: 
+You cannot access services (e.g., via LoadBalancer or NodePort). 
+
+Common Causes:  
+
+    Misconfigured service type or port mappings.
+    Firewall rules blocking traffic.
+    Incorrect DNS resolution.
+     
+
+Troubleshooting Steps:  
+
+    Check Service Configuration: 
+    bash
+     
+
+ 
+1
+kubectl describe service <SERVICE_NAME>
+ 
+ 
+
+Verify the service type (ClusterIP, NodePort, LoadBalancer) and port mappings. 
+
+Test Connectivity:
+For NodePort services: 
+bash
+ 
+ 
+1
+curl <NODE_IP>:<NODE_PORT>
+ 
+ 
+
+For LoadBalancer services: 
+bash
+ 
+ 
+1
+curl <EXTERNAL_IP>:<PORT>
+ 
+ 
+
+Verify Firewall Rules:
+Ensure firewall rules allow traffic to the nodes: 
+bash
+ 
+ 
+1
+gcloud compute firewall-rules list
+ 
+ 
+
+Check DNS Resolution:
+If using DNS names, verify DNS works: 
+bash
+ 
+
+     
+    1
+    nslookup <SERVICE_NAME>.<NAMESPACE>.svc.cluster.local
+     
+     
+     
+
+4. Nodes Are Not Joining the Cluster  
+
+Issue Description: 
+New nodes fail to join the cluster after scaling up. 
+
+Common Causes:  
+
+    Network issues between nodes and the control plane.
+    IAM permissions missing for node pools.
+    Outdated or incompatible node images.
+     
+
+Troubleshooting Steps:  
+
+    Check Node Status: 
+    bash
+     
+
+ 
+1
+kubectl get nodes
+ 
+ 
+
+Look for nodes in NotReady state. 
+
+Inspect Node Logs:
+SSH into the node and check logs: 
+bash
+ 
+ 
+1
+journalctl -u kubelet
+ 
+ 
+
+Verify IAM Permissions:
+Ensure the node service account has the roles/container.node role: 
+bash
+ 
+ 
+1
+gcloud projects get-iam-policy <PROJECT_ID>
+ 
+ 
+
+Update Node Images:
+Upgrade the node pool to the latest image: 
+bash
+ 
+
+     
+    1
+    gcloud container node-pools update <POOL_NAME> --cluster=<CLUSTER_NAME> --image-type=COS_CONTAINERD
+     
+     
+     
+
+5. Autoscaling Issues  
+
+Issue Description: 
+The cluster autoscaler fails to scale nodes up or down. 
+
+Common Causes:  
+
+    Insufficient quotas for Compute Engine resources.
+    Pods with anti-affinity rules preventing scaling.
+    Misconfigured autoscaler settings.
+     
+
+Troubleshooting Steps:  
+
+    Check Autoscaler Events: 
+    bash
+     
+
+ 
+1
+kubectl describe pod <POD_NAME>
+ 
+ 
+
+Look for events related to scaling. 
+
+Verify Quotas: 
+bash
+ 
+ 
+1
+gcloud compute project-info describe --project <PROJECT_ID>
+ 
+ 
+
+Request quota increases if needed. 
+
+Inspect Anti-Affinity Rules:
+Ensure pods do not have overly restrictive anti-affinity rules. 
+
+Enable Autoscaling:
+Configure autoscaling for the node pool: 
+bash
+ 
+
+     
+    1
+    gcloud container clusters update <CLUSTER_NAME> --enable-autoscaling --min-nodes=1 --max-nodes=10
+     
+     
+     
+
+6. Persistent Volume Claims (PVCs) Are Not Binding  
+
+Issue Description: 
+Persistent Volume Claims remain in the Pending state. 
+
+Common Causes:  
+
+    No available Persistent Volumes (PVs) matching the PVC requirements.
+    Storage class misconfiguration.
+     
+
+Troubleshooting Steps:  
+
+    Check PVC Status: 
+    bash
+     
+
+ 
+1
+kubectl get pvc
+ 
+ 
+
+Verify Storage Classes: 
+bash
+ 
+ 
+1
+kubectl get storageclass
+ 
+ 
+
+Ensure the PVC uses a valid storage class. 
+
+Create a PV Manually (if needed):
+Define a PV YAML file and apply it: 
+yaml
+ 
+
+     
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+    10
+    11
+    12
+    13
+    ⌄
+    ⌄
+    ⌄
+    ⌄
+    ⌄
+    apiVersion: v1
+    kind: PersistentVolume
+    metadata:
+      name: example-pv
+    spec:
+      capacity:
+        storage: 10Gi
+      accessModes:
+        - ReadWriteOnce
+      persistentVolumeReclaimPolicy: Retain
+      gcePersistentDisk:
+        pdName: example-disk
+        fsType: ext4
+     
+     
+
+    Retry PVC Creation:
+    Delete and recreate the PVC if necessary. 
+     
+
+7. High Latency or Performance Issues  
+
+Issue Description: 
+Applications experience high latency or degraded performance. 
+
+Common Causes:  
+
+    Overloaded nodes or pods.
+    Network bottlenecks.
+    Misconfigured Horizontal Pod Autoscaler (HPA).
+     
+
+Troubleshooting Steps:  
+
+    Monitor Resource Usage: 
+    bash
+     
+
+ 
+1
+2
+kubectl top nodes
+kubectl top pods
+ 
+ 
+
+Check Network Policies:
+Ensure network policies are not overly restrictive: 
+bash
+ 
+ 
+1
+kubectl get networkpolicies
+ 
+ 
+
+Scale Horizontally:
+Adjust HPA settings to scale pods based on CPU/memory usage: 
+bash
+ 
+
+     
+    1
+    kubectl autoscale deployment <DEPLOYMENT_NAME> --cpu-percent=50 --min=2 --max=10
+     
+     
+
+    Optimize Application Code:
+    Profile the application to identify bottlenecks. 
+     
+
+8. Control Plane Connectivity Issues  
+
+Issue Description: 
+The control plane becomes unreachable or unresponsive. 
+
+Common Causes:  
+
+    Network outages or misconfigurations.
+    IAM permission issues.
+     
+
+Troubleshooting Steps:  
+
+    Check Control Plane Status: 
+    bash
+     
+
+     
+    1
+    gcloud container clusters describe <CLUSTER_NAME>
+     
+     
+
+    Verify IAM Permissions:
+    Ensure the user/service account has the roles/container.admin role. 
+
+    Test Network Connectivity:
+    Use ping or traceroute to check connectivity to the control plane endpoint. 
+
+    Contact Support:
+    If the issue persists, contact Google Cloud Support for assistance. 
+     
+
+By following these troubleshooting steps, you can effectively resolve common GKE problems and ensure smooth operation of your Kubernetes clusters. 
