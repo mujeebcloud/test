@@ -1,0 +1,83 @@
+Most Common GKE Services and Networking Issues and Troubleshooting Steps
+
+1. **Service Not Reachable (ClusterIP, NodePort, LoadBalancer)**
+   - **Symptoms:** Clients can't connect to a service.
+   - **Troubleshooting Steps:**
+     1. Check service existence: `kubectl get svc <service-name>`
+     2. Check service endpoints: `kubectl get endpoints <service-name>`
+     3. Describe the service: `kubectl describe svc <service-name>`
+     4. Ensure backend pods are ready and labeled correctly.
+     5. Test connectivity from inside the cluster: `kubectl exec <pod> -- curl <service>`
+
+2. **DNS Resolution Failures**
+   - **Symptoms:** Pods can't resolve internal service names or external domains.
+   - **Troubleshooting Steps:**
+     1. Check CoreDNS pods: `kubectl get pods -n kube-system -l k8s-app=kube-dns`
+     2. Inspect CoreDNS logs: `kubectl logs <coredns-pod> -n kube-system`
+     3. Test DNS from pod: `kubectl exec <pod> -- nslookup <service>`
+     4. Ensure network policy or firewall rules aren’t blocking UDP port 53.
+
+3. **LoadBalancer Service Not Assigned External IP**
+   - **Symptoms:** Service remains in `Pending` status for external IP.
+   - **Troubleshooting Steps:**
+     1. Check service type: `kubectl get svc <name>`
+     2. Inspect service events: `kubectl describe svc <name>`
+     3. Verify that cloud provider API access is available.
+     4. Check GCP quota for external IP addresses.
+     5. Ensure GKE cluster has a service account with sufficient permissions.
+
+4. **Ingress Not Routing Traffic**
+   - **Symptoms:** Requests to external IP return 404/502/503 errors.
+   - **Troubleshooting Steps:**
+     1. Check Ingress status: `kubectl get ingress`
+     2. Describe the Ingress: `kubectl describe ingress <name>`
+     3. Check associated backend service and pods
+     4. Review readiness probes and health checks
+     5. Validate path rules and host definitions
+
+5. **NetworkPolicy Blocking Internal Traffic**
+   - **Symptoms:** Pods can’t communicate with each other.
+   - **Troubleshooting Steps:**
+     1. List active network policies: `kubectl get networkpolicy`
+     2. Describe applied policies and their selectors
+     3. Temporarily disable the policy to test connectivity
+     4. Review ingress/egress rules and adjust allow lists
+
+6. **Health Checks Failing for Load Balancers**
+   - **Symptoms:** Backend services show as unhealthy in GCP Console
+   - **Troubleshooting Steps:**
+     1. Check if readiness probes are correctly configured
+     2. Ensure the pods are listening on the right port
+     3. Verify service selectors match pod labels
+     4. Look for firewall rules that might block health check IP ranges
+
+7. **Firewall Rules Blocking Access**
+   - **Symptoms:** External or internal connectivity fails
+   - **Troubleshooting Steps:**
+     1. Inspect GCP firewall rules for the VPC
+     2. Ensure rules allow traffic on required ports (e.g., 80, 443, 30000+ for NodePorts)
+     3. Validate source IP ranges match expected traffic
+     4. Use GCP VPC flow logs to trace dropped packets
+
+8. **IP Exhaustion in Pod or Service CIDR**
+   - **Symptoms:** New pods/services cannot be assigned IPs
+   - **Troubleshooting Steps:**
+     1. Check cluster IP usage with `kubectl get pods -o wide`
+     2. Review subnet and CIDR allocation in GKE settings
+     3. Increase IP range or recreate cluster with larger subnet if exhausted
+
+9. **MTU Mismatches or Packet Fragmentation Issues**
+   - **Symptoms:** Intermittent or dropped connections, especially with VPNs
+   - **Troubleshooting Steps:**
+     1. Run `ping -s <size> -M do <host>` to test MTU size
+     2. Adjust MTU settings on nodes or network plugins
+     3. Test using smaller packet sizes to confirm issue
+
+10. **Service Endpoint Stale or Missing**
+    - **Symptoms:** Requests time out even though service and pods exist
+    - **Troubleshooting Steps:**
+      1. Confirm the service has endpoints: `kubectl get endpoints <service>`
+      2. Ensure backend pods match the service's label selector
+      3. Restart kube-proxy if necessary
+      4. Recreate the service or deployment to refresh endpoints
+

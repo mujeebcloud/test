@@ -1,0 +1,76 @@
+Most Common GKE Cluster Troubleshooting Scenarios and Resolution Steps
+
+1. **Cluster Authentication Fails**
+   - **Symptoms:** Unable to run `kubectl` commands; get authentication or permission errors.
+   - **Resolution Steps:**
+     1. Refresh credentials: `gcloud container clusters get-credentials <cluster-name> --zone <zone>`
+     2. Check IAM roles for user or service account.
+     3. Validate Kubernetes RBAC roles using `kubectl get clusterrolebindings`.
+
+2. **Cluster Nodes Not Joining**
+   - **Symptoms:** Cluster nodes are missing from `kubectl get nodes`
+   - **Resolution Steps:**
+     1. Check GKE console for failed node provisioning.
+     2. Inspect Compute Engine instance status.
+     3. Review service account permissions for Compute Engine API and Kubernetes Engine API.
+     4. Recreate node pool if necessary.
+
+3. **Nodes in NotReady State**
+   - **Symptoms:** Nodes show as NotReady.
+   - **Resolution Steps:**
+     1. SSH into node: `gcloud compute ssh <node-name>`
+     2. Check kubelet logs: `journalctl -u kubelet`
+     3. Review system resources: `df -h`, `top`
+     4. Restart node or delete to allow auto-recreation.
+
+4. **Control Plane Communication Issues**
+   - **Symptoms:** Cannot reach Kubernetes API server or deploy resources.
+   - **Resolution Steps:**
+     1. Check network policies or firewall rules.
+     2. Confirm if VPC peering or Private Cluster config is affecting access.
+     3. Validate `gcloud` CLI and credentials.
+
+5. **Cluster Autoscaler Not Working**
+   - **Symptoms:** Cluster does not scale when resources are low/high.
+   - **Resolution Steps:**
+     1. Verify autoscaling is enabled: `gcloud container node-pools describe`
+     2. Check logs: `gcloud logging read 'resource.type="gce_instance_group_manager"'`
+     3. Ensure no pod resource requests block scheduling.
+     4. Confirm min/max node pool limits.
+
+6. **Workload Identity Not Working**
+   - **Symptoms:** Pods cannot access GCP resources despite Workload Identity configuration.
+   - **Resolution Steps:**
+     1. Verify correct annotation on Kubernetes service account.
+     2. Confirm IAM roles on the linked GCP service account.
+     3. Use token introspection in pod: `curl -H "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" https://www.googleapis.com/oauth2/v3/tokeninfo`
+
+7. **NetworkPolicy Blocking Essential Traffic**
+   - **Symptoms:** Pods fail to connect to DNS, services, or internet.
+   - **Resolution Steps:**
+     1. List policies: `kubectl get networkpolicy`
+     2. Temporarily disable or adjust policies.
+     3. Use `kubectl exec` to test in-cluster DNS and service access.
+
+8. **PersistentVolume Not Binding**
+   - **Symptoms:** PVC remains in Pending state.
+   - **Resolution Steps:**
+     1. Inspect PVC and PV: `kubectl describe pvc <name>`
+     2. Ensure matching storage class and access modes.
+     3. Validate that the requested size is available.
+
+9. **Metrics and Logs Not Showing in GKE Dashboard**
+   - **Symptoms:** Missing logs or monitoring metrics.
+   - **Resolution Steps:**
+     1. Confirm Monitoring and Logging are enabled in the GKE cluster.
+     2. Check Fluentd and Prometheus-related pods.
+     3. Use `gcloud logging read` to fetch logs directly.
+
+10. **Cluster Upgrade or Maintenance Issues**
+    - **Symptoms:** Upgrades fail or cause downtime.
+    - **Resolution Steps:**
+     1. Use surge upgrades to reduce disruption.
+     2. Check GKE release notes before upgrading.
+     3. Monitor node pool upgrade status via GCP Console or `gcloud container operations list`
+     4. Ensure workloads use appropriate PodDisruptionBudgets and replica settings.
+

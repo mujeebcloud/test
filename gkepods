@@ -1,0 +1,85 @@
+Most Common GKE Pod Problems and Troubleshooting Steps
+
+1. **CrashLoopBackOff**
+   - **Symptoms:** Pod keeps restarting repeatedly
+   - **Troubleshooting Steps:**
+     1. Check logs: `kubectl logs <pod-name>`
+     2. Describe pod: `kubectl describe pod <pod-name>`
+     3. Look for incorrect environment variables or config map values
+     4. Validate container entrypoint and command
+     5. Ensure the application has necessary permissions or dependencies
+     6. Review readiness/liveness probes configuration
+
+2. **ImagePullBackOff / ErrImagePull**
+   - **Symptoms:** Pod fails to start due to image pull issues
+   - **Troubleshooting Steps:**
+     1. Check container image name and tag for typos
+     2. Confirm image exists in the registry
+     3. If private registry, check imagePullSecrets setup
+     4. Try pulling image manually on a GKE node
+     5. Describe pod to see detailed error: `kubectl describe pod <pod-name>`
+
+3. **Pending Pods**
+   - **Symptoms:** Pod stuck in Pending state
+   - **Troubleshooting Steps:**
+     1. Describe pod: `kubectl describe pod <pod-name>`
+     2. Check if requested resources (CPU/memory) exceed available node capacity
+     3. Validate that a suitable node pool exists for scheduling
+     4. Review taints and tolerations
+     5. Check for missing Persistent Volumes if PVC is used
+
+4. **OOMKilled**
+   - **Symptoms:** Pod is killed due to out-of-memory errors
+   - **Troubleshooting Steps:**
+     1. Check pod status and reason: `kubectl get pod <pod-name> -o json | jq .status.containerStatuses`
+     2. Review logs before crash: `kubectl logs <pod-name>`
+     3. Adjust resource requests/limits to provide more memory
+     4. Investigate application memory usage
+
+5. **ContainerCreating for Extended Period**
+   - **Symptoms:** Pod stuck in ContainerCreating state
+   - **Troubleshooting Steps:**
+     1. Describe pod: `kubectl describe pod <pod-name>`
+     2. Check image pulling progress
+     3. Verify that PVCs are bound and available
+     4. Look at node conditions (e.g., disk pressure, network issues)
+
+6. **Readiness/Liveness Probe Failures**
+   - **Symptoms:** Pod restarts or becomes unready
+   - **Troubleshooting Steps:**
+     1. Review pod spec for probe configuration
+     2. Check logs for the application endpoint health
+     3. Use `kubectl exec` to curl the probe endpoint from inside the pod
+     4. Adjust probe thresholds or paths
+
+7. **Pod Evicted**
+   - **Symptoms:** Pod is evicted from a node
+   - **Troubleshooting Steps:**
+     1. Check eviction reason: `kubectl describe pod <pod-name>`
+     2. Common reasons include disk pressure or memory pressure
+     3. Monitor node resource usage
+     4. Consider increasing node capacity or tuning resource limits
+
+8. **NodeAffinity / AntiAffinity Scheduling Failures**
+   - **Symptoms:** Pod remains unscheduled
+   - **Troubleshooting Steps:**
+     1. Check pod spec for affinity/anti-affinity rules
+     2. Ensure nodes match the required labels
+     3. Describe pod and review `Events:` section for scheduling issues
+
+9. **Network Communication Failures**
+   - **Symptoms:** Pod unable to reach other services/pods
+   - **Troubleshooting Steps:**
+     1. Check if NetworkPolicy is applied
+     2. Validate pod's IP and service endpoints
+     3. Use `kubectl exec` to test connectivity
+     4. Review network policy allow/deny rules
+
+10. **Filesystem Read-Only or Mount Errors**
+    - **Symptoms:** Application errors due to read-only filesystems
+    - **Troubleshooting Steps:**
+      1. Describe pod to check volume mount status
+      2. Review PVC and storage class settings
+      3. Check if the disk is already in use by another pod
+      4. Recreate the pod or PVC if corruption is suspected
+
