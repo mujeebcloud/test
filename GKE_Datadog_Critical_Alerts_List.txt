@@ -1,0 +1,14 @@
+                       Alert Name                                                               Datadog Query                                   Description            Recommended Threshold
+               GKE Node Not Ready                    kubernetes.state.node.status{status:not_ready} by {node}    Alert when a GKE node is in NotReady state  count by node > 0 for 5 minutes
+         GKE Pod CrashLoopBackOff       kubernetes.containers.restarts{reason:CrashLoopBackOff} by {pod_name}                       Pod is stuck restarting     restarts > 3 over 10 minutes
+          GKE High Node CPU Usage                    avg(last_5m):avg:kubernetes.cpu.usage.total{*} by {node}                       High CPU usage on nodes                            > 90%
+       GKE High Node Memory Usage                       avg(last_5m):avg:kubernetes.memory.usage{*} by {node}                    High memory usage on nodes                            > 90%
+           GKE Unschedulable Pods          kubernetes_state.pod.scheduled{status:unschedulable} by {pod_name}       Insufficient resources to schedule pods count by pod_name > 0 for 5 mins
+                 GKE Kubelet Down                                                       up{kubelet} by {node}                Missing heartbeat from kubelet        kubelet up = 0 for 5 mins
+GKE Control Plane API Unreachable                                     kubernetes.apiserver.up{*} by {cluster} Cannot communicate with Kubernetes API server                up = 0 for 2 mins
+           GKE Node Disk Pressure                  kubernetes_state.node.disk_pressure{status:true} by {node}                   Node is under disk pressure                        count > 0
+                 GKE Evicted Pods            kubernetes_state.pod.status_reason{reason:Evicted} by {pod_name}      Pods evicted due to resource constraints                        count > 0
+ GKE High Container Restart Count                       kubernetes.containers.restarts{*} by {container_name}               Containers restarting too often          restarts > 3 in 10 mins
+          GKE OOMKilled Container kubernetes_state.container.terminated{reason:OOMKilled} by {container_name}         Container killed due to out-of-memory                        count > 0
+  GKE Cluster Autoscaler Failures                                          logs("cluster-autoscaler failure")                    Autoscaler errors detected          log count > 0 in 5 mins
+           GKE Certificate Expiry                            tls.cert.expiry.days_remaining{*} by {cert_name}                 TLS certificate expiring soon                        < 14 days
