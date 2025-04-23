@@ -1,0 +1,23 @@
+{
+  "name": "GKE Critical Best Practices Violations",
+  "type": "composite",
+  "query": "monitor_alert(\"GKE Node CPU Pressure\") || monitor_alert(\"GKE Node Memory Pressure\") || monitor_alert(\"GKE Pod Evictions\") || monitor_alert(\"GKE API Server Errors\") || monitor_alert(\"GKE Pending Pods\") || monitor_alert(\"GKE Node Not Ready\") || monitor_alert(\"GKE Disk Pressure\") || monitor_alert(\"GKE OOM Kills\")",
+  "message": "## Critical GKE Best Practices Violation Detected\n\nOne or more critical GKE best practices are being violated:\n\n- High node CPU usage (over 80%)\n- High node memory usage (over 80%)\n- Pod evictions occurring\n- API server errors\n- Pending pods not being scheduled\n- Nodes not in ready state\n- High disk usage (over 80%)\n- Containers being OOM killed\n\n**Action Required:** Investigate the specific alert(s) triggering this notification.",
+  "tags": ["gke", "best-practices", "critical"],
+  "priority": 3,
+  "options": {
+    "include_tags": true,
+    "notify_audit": true,
+    "notify_no_data": false,
+    "renotify_interval": 60,
+    "timeout_h": 0,
+    "escalation_message": "",
+    "new_host_delay": 300,
+    "require_full_window": true,
+    "locked": false,
+    "thresholds": {
+      "critical": 1,
+      "warning": 0
+    }
+  }
+}
