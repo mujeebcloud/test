@@ -1,0 +1,234 @@
+{
+  "resource": {
+    "type": "gcp_artifact_registry",
+    "labels": {
+      "project_id": "YOUR_PROJECT_ID",
+      "location": "REGION_OR_ZONE",
+      "repository_id": "YOUR_REPOSITORY_ID"
+    }
+  },
+  "metrics": [
+    {
+      "type": "artifactregistry.googleapis.com/repository/request_count",
+      "metric_kind": "DELTA",
+      "value_type": "INT64",
+      "unit": "1",
+      "description": "Count of requests to the Artifact Registry repository",
+      "labels": [
+        {
+          "key": "method",
+          "description": "The HTTP method of the request"
+        },
+        {
+          "key": "response_code",
+          "description": "The HTTP response code"
+        }
+      ]
+    },
+    {
+      "type": "artifactregistry.googleapis.com/repository/network_bytes",
+      "metric_kind": "DELTA",
+      "value_type": "INT64",
+      "unit": "By",
+      "description": "Bytes transferred to/from the Artifact Registry repository",
+      "labels": [
+        {
+          "key": "direction",
+          "description": "Direction of network traffic (upload/download)"
+        }
+      ]
+    },
+    {
+      "type": "artifactregistry.googleapis.com/repository/storage_bytes",
+      "metric_kind": "GAUGE",
+      "value_type": "INT64",
+      "unit": "By",
+      "description": "Storage used by the Artifact Registry repository"
+    },
+    {
+      "type": "artifactregistry.googleapis.com/repository/operation_count",
+      "metric_kind": "DELTA",
+      "value_type": "INT64",
+      "unit": "1",
+      "description": "Count of operations performed on the repository",
+      "labels": [
+        {
+          "key": "operation_type",
+          "description": "Type of operation (e.g., CREATE, DELETE, etc.)"
+        }
+      ]
+    },
+    {
+      "type": "artifactregistry.googleapis.com/repository/uptime",
+      "metric_kind": "GAUGE",
+      "value_type": "DOUBLE",
+      "unit": "1",
+      "description": "Uptime percentage of the Artifact Registry service"
+    },
+    {
+      "type": "artifactregistry.googleapis.com/repository/downtime",
+      "metric_kind": "GAUGE",
+      "value_type": "DOUBLE",
+      "unit": "s",
+      "description": "Downtime duration of the Artifact Registry service"
+    }
+  ],
+  "service": {
+    "name": "artifact-registry",
+    "team": "devops",
+    "dependencies": ["gcp"],
+    "availability": {
+      "sla": "99.9%",
+      "uptime_metrics": ["artifactregistry.googleapis.com/repository/uptime"]
+    }
+  },
+  "datadog": {
+    "monitors": [
+      {
+        "name": "High Artifact Registry Request Errors",
+        "type": "query alert",
+        "query": "sum(last_5m):sum:gcp.artifactregistry.repository.request_count{response_code:5*} by {repository_id}.as_count() > 10",
+        "message": "High number of 5xx errors detected in Artifact Registry repository {{repository_id}}. Please investigate potential service issues.",
+        "tags": ["service:artifact-registry", "team:devops"],
+        "options": {
+          "thresholds": {
+            "critical": 10
+          },
+          "notify_no_data": false
+        }
+      },
+      {
+        "name": "Artifact Registry Storage Approaching Limit",
+        "type": "query alert",
+        "query": "avg(last_1h):avg:gcp.artifactregistry.repository.storage_bytes{*} by {repository_id} > 8589934592",
+        "message": "Artifact Registry repository {{repository_id}} is using more than 8GB of storage. Consider cleaning up unused artifacts.",
+        "tags": ["service:artifact-registry", "team:devops"],
+        "options": {
+          "thresholds": {
+            "warning": 6442450944,
+            "critical": 8589934592
+          }
+        }
+      },
+      {
+        "name": "Artifact Registry Availability Below SLA",
+        "type": "query alert",
+        "query": "avg(last_15m):avg:gcp.artifactregistry.repository.uptime{*} by {repository_id} < 99.9",
+        "message": "Artifact Registry repository {{repository_id}} availability is below 99.9% SLA. Current uptime: {{value}}%",
+        "tags": ["service:artifact-registry", "team:devops", "sla"],
+        "options": {
+          "thresholds": {
+            "critical": 99.9
+          },
+          "notify_no_data": true,
+          "no_data_timeframe": 30
+        }
+      },
+      {
+        "name": "Artifact Registry Downtime Detected",
+        "type": "query alert",
+        "query": "avg(last_5m):avg:gcp.artifactregistry.repository.downtime{*} by {repository_id} > 0",
+        "message": "Downtime detected in Artifact Registry repository {{repository_id}}. Duration: {{value}} seconds",
+        "tags": ["service:artifact-registry", "team:devops", "availability"],
+        "options": {
+          "thresholds": {
+            "critical": 0
+          },
+          "notify_no_data": false
+        }
+      }
+    ],
+    "dashboards": [
+      {
+        "title": "Google Artifact Registry Overview",
+        "description": "Overview of Google Artifact Registry metrics including availability",
+        "widgets": [
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Request Count by Response Code",
+              "requests": [
+                {
+                  "q": "sum:gcp.artifactregistry.repository.request_count{*} by {response_code}",
+                  "display_type": "bars"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Network Traffic",
+              "requests": [
+                {
+                  "q": "sum:gcp.artifactregistry.repository.network_bytes{direction:upload}",
+                  "display_type": "line",
+                  "name": "Upload"
+                },
+                {
+                  "q": "sum:gcp.artifactregistry.repository.network_bytes{direction:download}",
+                  "display_type": "line",
+                  "name": "Download"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "gauge",
+              "title": "Storage Usage",
+              "requests": [
+                {
+                  "q": "avg:gcp.artifactregistry.repository.storage_bytes{*} by {repository_id}",
+                  "display_type": "gauge"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Service Availability",
+              "requests": [
+                {
+                  "q": "avg:gcp.artifactregistry.repository.uptime{*} by {repository_id}",
+                  "display_type": "line",
+                  "name": "Uptime %"
+                }
+              ],
+              "yaxis": {
+                "scale": "linear",
+                "min": "0",
+                "max": "100",
+                "include_zero": true
+              }
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Downtime Duration",
+              "requests": [
+                {
+                  "q": "avg:gcp.artifactregistry.repository.downtime{*} by {repository_id}",
+                  "display_type": "line",
+                  "name": "Downtime (seconds)"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "slo",
+              "title": "Artifact Registry SLA",
+              "slo_id": "YOUR_SLO_ID",
+              "show_error_budget": true,
+              "view_type": "detail",
+              "time_windows": ["7d", "30d"]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
