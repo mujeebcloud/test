@@ -1,0 +1,110 @@
+{
+  "title": "GKE Monitoring Essentials",
+  "widgets": [
+    {
+      "definition": {
+        "title": "Cluster CPU Usage",
+        "type": "timeseries",
+        "requests": [
+          {
+            "q": "avg:kubernetes.cpu.usage.total{*} by {cluster_name}",
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Cluster Memory Usage",
+        "type": "timeseries",
+        "requests": [
+          {
+            "q": "avg:kubernetes.memory.usage{*} by {cluster_name}",
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Nodes Ready",
+        "type": "query_value",
+        "requests": [
+          {
+            "q": "avg:kubernetes.state.node.ready{*} by {cluster_name}",
+            "aggregator": "avg"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Node Disk Usage %",
+        "type": "timeseries",
+        "requests": [
+          {
+            "q": "avg:system.disk.in_use{*} by {host}",
+            "display_type": "area"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Pod Restarts",
+        "type": "timeseries",
+        "requests": [
+          {
+            "q": "sum:kubernetes.pod.restart_count{*} by {pod_name}",
+            "display_type": "bar"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Pending Pods",
+        "type": "query_value",
+        "requests": [
+          {
+            "q": "sum:kubernetes_state.pod.status_phase{phase:pending}",
+            "aggregator": "sum"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Kubernetes Events (Warnings)",
+        "type": "timeseries",
+        "requests": [
+          {
+            "q": "sum:kubernetes_state.event.count{type:Warning} by {reason}",
+            "display_type": "bar"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "GKE Control Plane Latency (if available)",
+        "type": "timeseries",
+        "requests": [
+          {
+            "q": "avg:gke.googleapis.com/api/server_response_latencies{*}",
+            "display_type": "line"
+          }
+        ]
+      }
+    }
+  ],
+  "layout_type": "ordered",
+  "description": "Essential GKE alerts and metrics to monitor cluster and workload health.",
+  "is_read_only": false,
+  "notify_list": [],
+  "template_variables": [],
+  "template_variable_presets": [],
+  "reflow_type": "auto",
+  "id": "gke_monitoring_dashboard",
+  "title_editable": true
+}
