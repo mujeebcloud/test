@@ -1,0 +1,115 @@
+{
+  "title": "GKE Monitoring Essentials",
+  "description": "Essential metrics and alerts for GKE cluster health.",
+  "widgets": [
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Cluster CPU Usage",
+        "requests": [
+          {
+            "q": "avg:kubernetes.cpu.usage.total{*} by {cluster_name}",
+            "display_type": "line",
+            "style": {
+              "palette": "cool",
+              "line_type": "solid",
+              "line_width": "normal"
+            }
+          }
+        ]
+      },
+      "layout": {
+        "x": 0,
+        "y": 0,
+        "width": 12,
+        "height": 6
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Cluster Memory Usage",
+        "requests": [
+          {
+            "q": "avg:kubernetes.memory.usage{*} by {cluster_name}",
+            "display_type": "line",
+            "style": {
+              "palette": "warm",
+              "line_type": "solid",
+              "line_width": "normal"
+            }
+          }
+        ]
+      },
+      "layout": {
+        "x": 12,
+        "y": 0,
+        "width": 12,
+        "height": 6
+      }
+    },
+    {
+      "definition": {
+        "type": "query_value",
+        "title": "Pending Pods",
+        "requests": [
+          {
+            "q": "sum:kubernetes_state.pod.status_phase{phase:pending}",
+            "aggregator": "sum"
+          }
+        ]
+      },
+      "layout": {
+        "x": 0,
+        "y": 6,
+        "width": 6,
+        "height": 4
+      }
+    },
+    {
+      "definition": {
+        "type": "query_value",
+        "title": "Node Readiness",
+        "requests": [
+          {
+            "q": "avg:kubernetes_state.node.ready{*} by {cluster_name}",
+            "aggregator": "avg"
+          }
+        ]
+      },
+      "layout": {
+        "x": 6,
+        "y": 6,
+        "width": 6,
+        "height": 4
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Pod Restart Count",
+        "requests": [
+          {
+            "q": "sum:kubernetes.pod.restart_count{*} by {pod_name}",
+            "display_type": "bar",
+            "style": {
+              "palette": "purple",
+              "line_type": "solid",
+              "line_width": "normal"
+            }
+          }
+        ]
+      },
+      "layout": {
+        "x": 12,
+        "y": 6,
+        "width": 12,
+        "height": 6
+      }
+    }
+  ],
+  "layout_type": "ordered",
+  "is_read_only": false,
+  "notify_list": []
+}
+
