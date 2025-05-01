@@ -1,0 +1,35 @@
+{
+  "title": "GKE Minimal Dashboard",
+  "description": "Verified, minimal GKE metrics to test JSON import.",
+  "layout_type": "ordered",
+  "is_read_only": false,
+  "widgets": [
+    {
+      "id": 123456,
+      "definition": {
+        "type": "timeseries",
+        "title": "Container CPU Usage",
+        "requests": [
+          {
+            "q": "avg:container.cpu.usage.total{*} by {cluster_name}",
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "id": 654321,
+      "definition": {
+        "type": "query_value",
+        "title": "Pending Pods",
+        "requests": [
+          {
+            "q": "sum:kubernetes_state.pod.status_phase{phase:pending}",
+            "aggregator": "sum"
+          }
+        ]
+      }
+    }
+  ],
+  "notify_list": []
+}
