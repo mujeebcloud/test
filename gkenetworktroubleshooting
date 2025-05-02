@@ -1,0 +1,364 @@
+Common GKE Network Issues and Troubleshooting Guide
+Here's a comprehensive list of common GKE networking issues with detailed troubleshooting steps:
+
+1. Pod-to-Pod Communication Failure
+Symptoms:
+
+Pods in different nodes can't communicate
+
+Intermittent connection drops between pods
+
+Services can't reach their backend pods
+
+Troubleshooting Steps:
+
+Verify Network Policy Restrictions:
+
+bash
+kubectl get networkpolicy --all-namespaces
+kubectl describe networkpolicy <policy-name> -n <namespace>
+Temporarily disable policies to test if they're causing the blockage.
+
+Check CNI Plugin Status:
+
+bash
+kubectl get pods -n kube-system -l k8s-app=kube-dns
+kubectl logs <cni-pod-name> -n kube-system
+Test Basic Connectivity:
+
+bash
+kubectl run -it --rm --restart=Never test-pod --image=busybox -- ping <target-pod-ip>
+Verify Node Network:
+
+bash
+gcloud compute ssh <node-name> --zone <zone>
+ping <other-node-internal-ip>
+2. Service ClusterIP Not Working
+Symptoms:
+
+Services are not reachable via ClusterIP
+
+Endpoints exist but connections time out
+
+DNS resolution works but connections fail
+
+Troubleshooting Steps:
+
+Verify Service Endpoints:
+
+bash
+kubectl get endpoints <service-name>
+kubectl describe service <service-name>
+Check kube-proxy:
+
+bash
+kubectl logs <kube-proxy-pod> -n kube-system
+Inspect iptables Rules:
+
+bash
+gcloud compute ssh <node-name> --zone <zone>
+sudo iptables-save | grep <service-name>
+Test Service from Pod:
+
+bash
+kubectl run -it --rm --restart=Never test-pod --image=busybox -- wget -qO- <service-cluster-ip>:<port>
+3. NodePort Service Unreachable
+Symptoms:
+
+Can't access NodePort from external clients
+
+NodePort responds only on some nodes
+
+Connection timeouts or refused connections
+
+Troubleshooting Steps:
+
+Verify NodePort Range:
+
+bash
+kubectl get svc <service-name> -o jsonpath='{.spec.ports[0].nodePort}'
+Check Firewall Rules:
+
+bash
+gcloud compute firewall-rules list --filter="name~gke-<cluster-name>"
+Test Directly on Node:
+
+bash
+gcloud compute ssh <node-name> --zone <zone>
+curl localhost:<node-port>
+Verify Health Checks:
+
+bash
+gcloud compute health-checks list
+gcloud compute backend-services list
+4. Ingress Controller Issues
+Symptoms:
+
+Ingress resource not creating load balancer
+
+502/503 errors from ingress
+
+Long latency through ingress
+
+Troubleshooting Steps:
+
+Check Ingress Events:
+
+bash
+kubectl describe ingress <ingress-name>
+Verify Backend Services:
+
+bash
+kubectl get ingress -o wide
+kubectl get pods -n <namespace> -l <service-selector>
+Inspect GCP Load Balancer:
+
+bash
+gcloud compute url-maps list
+gcloud compute backend-services get-health <backend-service-name>
+Check Ingress Controller Logs:
+
+bash
+kubectl logs -n kube-system <ingress-controller-pod>
+5. DNS Resolution Failures
+Symptoms:
+
+Pods can't resolve cluster services
+
+External DNS lookups fail
+
+Intermittent DNS timeouts
+
+Troubleshooting Steps:
+
+Test CoreDNS/kube-dns:
+
+bash
+kubectl run -it --rm --restart=Never test-pod --image=busybox -- nslookup kubernetes.default
+Check DNS Pods:
+
+bash
+kubectl get pods -n kube-system -l k8s-app=kube-dns
+kubectl logs -n kube-system <dns-pod>
+Verify DNS Config:
+
+bash
+kubectl exec -it <pod-name> -- cat /etc/resolv.conf
+Check Node DNS Settings:
+
+bash
+gcloud compute ssh <node-name> --zone <zone>
+cat /etc/resolv.conf
+6. Network Performance Issues
+Symptoms:
+
+High latency between pods
+
+Low throughput in pod-to-pod communication
+
+Inconsistent network performance
+
+Troubleshooting Steps:
+
+Benchmark Network:
+
+bash
+kubectl run -it --rm --restart=Never test-pod --image=infoblox/iperf3 -- iperf3 -c <target-pod-ip>
+Check Node Network:
+
+bash
+gcloud compute ssh <node-name> --zone <zone>
+ifconfig
+ethtool <interface>
+Verify MTU Settings:
+
+bash
+kubectl exec -it <pod-name> -- ping -M do -s 1472 <other-pod-ip>
+Monitor Network Metrics:
+
+bash
+kubectl top pods --containers
+gcloud monitoring dashboards create --config-from-file=network_metrics.yaml
+7. GKE Network Policy Enforcement Issues
+Symptoms:
+
+Network policies not being enforced
+
+Unexpected traffic allowed/blocked
+
+Policies not applying to specific pods
+
+Troubleshooting Steps:
+
+Verify Network Policy Controller:
+
+bash
+kubectl get pods -n kube-system -l k8s-app=calico-node
+kubectl logs -n kube-system <calico-pod>
+Check Pod Labels:
+
+bash
+kubectl get pods --show-labels
+Test Policy Impact:
+
+bash
+kubectl run -it --rm --restart=Never test-pod --image=alpine -- nc -zv <target-pod-ip> <port>
+Inspect Calico/Anthos Logs:
+
+bash
+kubectl logs -n kube-system <network-policy-controller-pod>
+8. VPC-native Cluster Issues
+Symptoms:
+
+Pod IP allocation failures
+
+Subnet IP exhaustion
+
+Cross-cluster communication failures
+
+Troubleshooting Steps:
+
+Check IP Ranges:
+
+bash
+gcloud container clusters describe <cluster-name> --format="value(ipAllocationPolicy)"
+Verify Secondary Ranges:
+
+bash
+gcloud compute networks subnets describe <subnet-name> --region <region>
+Monitor IP Usage:
+
+bash
+kubectl get pods --all-namespaces -o wide | awk '{print $4}' | grep -v NODE | sort | uniq -c
+Check GKE Operations:
+
+bash
+gcloud logging read 'resource.type="gke_operation"' --limit=50
+Advanced Troubleshooting Tools
+For complex issues, consider these additional tools:
+
+Network Packet Capture:
+
+bash
+kubectl run -it --rm --restart=Never sniff --image=nicolaka/netshoot -- tcpdump -i any -w /tmp/capture.pcap
+Service Mesh Inspection (if using Istio/Anthos):
+
+bash
+istioctl proxy-config clusters <pod-name> -n <namespace>
+istioctl analyze
+GCP Network Intelligence Center:
+
+bash
+gcloud services enable networkintelligence.googleapis.com
+GKE Network Metrics:
+
+bash
+gcloud monitoring dashboards create --config-from-file=network_metrics.yaml
+Remember to check GKE-specific logs:
+
+bash
+gcloud logging read 'resource.type="gke_cluster"' --limit=50
+gcloud logging read 'resource.type="gke_nodepool"' --limit=50
+CAN YOU SUMMARISE THE ABOUT AS A DOWNLOADABLE TEXT FILE
+Certainly! Below is a summarized version of the GKE Network Issues and Troubleshooting Guide in a format suitable for a downloadable text file. You can copy this into a .txt file for easy reference.
+
+GKE Network Issues & Troubleshooting Guide
+1. Pod-to-Pod Communication Failure
+Symptoms:
+
+Pods on different nodes can’t communicate
+
+Intermittent connection drops
+
+Troubleshooting:
+✔ Check NetworkPolicy restrictions
+✔ Verify CNI plugin status (kubectl logs <cni-pod> -n kube-system)
+✔ Test connectivity (kubectl run test-pod --image=busybox -- ping <target-pod-ip>)
+
+2. Service ClusterIP Not Working
+Symptoms:
+
+ClusterIP unreachable
+
+Endpoints exist but time out
+
+Troubleshooting:
+✔ Verify endpoints (kubectl get endpoints <service-name>)
+✔ Check kube-proxy logs
+✔ Inspect iptables rules (sudo iptables-save | grep <service-name>)
+
+3. NodePort Service Unreachable
+Symptoms:
+
+External access fails
+
+Only works on some nodes
+
+Troubleshooting:
+✔ Verify firewall rules (gcloud compute firewall-rules list)
+✔ Test locally on node (curl localhost:<node-port>)
+
+4. Ingress Issues (502/503 Errors)
+Symptoms:
+
+Ingress not creating LB
+
+High latency
+
+Troubleshooting:
+✔ Check Ingress events (kubectl describe ingress <name>)
+✔ Verify GCP LB health (gcloud compute backend-services get-health <name>)
+
+5. DNS Failures
+Symptoms:
+
+Pods can’t resolve services
+
+Intermittent timeouts
+
+Troubleshooting:
+✔ Test DNS (kubectl run test-pod --image=busybox -- nslookup kubernetes.default)
+✔ Check CoreDNS/kube-dns logs
+
+6. Network Performance Issues
+Symptoms:
+
+High latency
+
+Low throughput
+
+Troubleshooting:
+✔ Benchmark with iperf3
+✔ Check MTU settings (ping -M do -s 1472 <target-ip>)
+
+7. Network Policy Enforcement Issues
+Symptoms:
+
+Policies not blocking/allowing expected traffic
+
+Troubleshooting:
+✔ Verify NetworkPolicy labels
+✔ Check Calico/Anthos logs
+
+8. VPC-native Cluster Issues (IP Exhaustion)
+Symptoms:
+
+Pod IP allocation failures
+
+Troubleshooting:
+✔ Check secondary ranges (gcloud compute networks subnets describe <subnet>)
+✔ Monitor IP usage (kubectl get pods -o wide | grep IPs)
+
+Advanced Tools
+🔹 Packet Capture:
+
+bash
+kubectl run sniff --image=nicolaka/netshoot -- tcpdump -i any -w /tmp/capture.pcap  
+🔹 GCP Network Intelligence Center:
+
+bash
+gcloud services enable networkintelligence.googleapis.com  
+🔹 GKE Logs:
+
+bash
+gcloud logging read 'resource.type="gke_cluster"' --limit=50  
