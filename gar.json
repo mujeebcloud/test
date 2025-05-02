@@ -1,0 +1,119 @@
+{
+  "title": "Google Artifact Registry Metrics",
+  "description": "Dashboard for monitoring Google Artifact Registry performance",
+  "widgets": [
+    {
+      "id": "storage_usage",
+      "definition": {
+        "title": "Storage Usage",
+        "type": "timeseries",
+        "requests": [
+          {
+            "q": "sum:gcp.artifactregistry.repository.storage.total_size{project_id:$project_id} by {repository_id}",
+            "display_type": "area",
+            "style": {
+              "palette": "cool"
+            }
+          }
+        ],
+        "yaxis": {
+          "scale": "linear",
+          "include_zero": true,
+          "label": "Bytes"
+        }
+      }
+    },
+    {
+      "id": "request_rates",
+      "definition": {
+        "title": "Request Rates",
+        "type": "timeseries",
+        "requests": [
+          {
+            "q": "sum:gcp.artifactregistry.repository.request_count{project_id:$project_id} by {repository_id}.as_count()",
+            "display_type": "line",
+            "style": {
+              "palette": "dog_classic"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "latency",
+      "definition": {
+        "title": "Request Latency",
+        "type": "timeseries",
+        "requests": [
+          {
+            "q": "avg:gcp.artifactregistry.repository.request_latency{project_id:$project_id} by {repository_id}",
+            "display_type": "line",
+            "style": {
+              "palette": "warm"
+            }
+          }
+        ],
+        "yaxis": {
+          "scale": "linear",
+          "label": "Milliseconds"
+        }
+      }
+    },
+    {
+      "id": "error_rates",
+      "definition": {
+        "title": "Error Rates",
+        "type": "timeseries",
+        "requests": [
+          {
+            "q": "sum:gcp.artifactregistry.repository.request_count{status:failed,project_id:$project_id} by {repository_id}.as_count()",
+            "display_type": "bars",
+            "name": "Errors",
+            "style": {
+              "palette": "warm"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "auth_metrics",
+      "definition": {
+        "title": "Authentication Metrics",
+        "type": "timeseries",
+        "requests": [
+          {
+            "q": "sum:gcp.artifactregistry.repository.auth_success_count{project_id:$project_id} by {repository_id}.as_count()",
+            "display_type": "line",
+            "name": "Success",
+            "style": {
+              "palette": "cool"
+            }
+          },
+          {
+            "q": "sum:gcp.artifactregistry.repository.auth_failure_count{project_id:$project_id} by {repository_id}.as_count()",
+            "display_type": "line",
+            "name": "Failure",
+            "style": {
+              "palette": "warm"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "template_variables": [
+    {
+      "name": "project_id",
+      "default": "*",
+      "prefix": "project_id"
+    },
+    {
+      "name": "repository_id",
+      "default": "*",
+      "prefix": "repository_id"
+    }
+  ],
+  "layout_type": "ordered",
+  "is_read_only": false
+}
