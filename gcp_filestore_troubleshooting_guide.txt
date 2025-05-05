@@ -1,0 +1,96 @@
+
+GCP Cloud Filestore - Common Troubleshooting Scenarios
+=======================================================
+
+1. NFS Mount Failures
+---------------------
+Symptoms:
+- Mount command fails with "connection timed out" or "access denied".
+
+Steps:
+1. Verify mount command:
+   sudo mount -t nfs -o vers=3,nolock <filestore_ip>:/<share_name> /mnt/my_mount
+2. Confirm Filestore IP and path via:
+   gcloud filestore instances describe <instance> --zone=<zone>
+3. Check VPC firewall rules (port 2049 must be open).
+4. Ensure NFS support installed on client:
+   sudo apt install nfs-common OR sudo yum install nfs-utils
+
+2. Slow File Access or IO Latency
+---------------------------------
+Symptoms:
+- Reads/writes are slow or hang.
+
+Steps:
+1. Measure latency:
+   time cat /mnt/filestore/testfile
+2. Check VM and Filestore throughput usage.
+3. View Datadog metric: gcp.filestore.instance.network_throughput
+4. Look for NFS issues in: dmesg, /var/log/syslog
+5. Consider upgrading to a higher tier.
+
+3. High Error Rates
+-------------------
+Symptoms:
+- IO errors like "Input/output error" or stale handles.
+
+Steps:
+1. Check mount with: df -hT and mount | grep nfs
+2. Validate file/folder permissions.
+3. Check client logs for NFS-related messages.
+4. Try mounting from another VM.
+5. Restart NFS client: sudo systemctl restart nfs-common
+
+4. "No Space Left on Device"
+----------------------------
+Symptoms:
+- Writes fail due to capacity limits.
+
+Steps:
+1. Run: df -h /mnt/filestore
+2. Check Datadog: gcp.filestore.instance.storage_utilization
+3. Delete unused files or move to GCS.
+4. Resize instance (if allowed):
+   gcloud filestore instances update <instance> --file-share=name="vol1",capacity=5TB --zone=<zone>
+
+5. Instance Not Reachable
+-------------------------
+Symptoms:
+- Cannot ping Filestore IP or mount hangs.
+
+Steps:
+1. Ping and test port 2049: nc -vz <filestore_ip> 2049
+2. Verify firewall allows access.
+3. Ensure VM is in correct subnet/VPC.
+4. If cross-project, validate VPC peering setup.
+
+6. Backup or Snapshot Failures
+------------------------------
+Symptoms:
+- Backup job fails in UI or logs.
+
+Steps:
+1. View backup logs in GCP console.
+2. Ensure proper IAM roles: roles/file.editor, roles/compute.storageAdmin
+3. Check quota limits: gcloud filestore backups list
+4. Retry manual backup using CLI.
+
+7. IAM or Access Issues
+-----------------------
+Symptoms:
+- GCP UI or API access denied errors.
+
+Steps:
+1. List IAM bindings:
+   gcloud projects get-iam-policy <project-id>
+2. Required roles: roles/file.admin or roles/file.editor
+3. Review Org Policy constraints in console under "Organization Policies".
+
+Monitoring Tips with Datadog
+----------------------------
+Useful metrics:
+- gcp.filestore.instance.storage_utilization
+- gcp.filestore.instance.network_throughput
+- gcp.filestore.instance.ops_read / ops_write
+- system.io.util (from client host)
+
