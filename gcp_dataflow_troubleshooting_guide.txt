@@ -1,0 +1,99 @@
+
+GCP Dataflow - Common Troubleshooting Scenarios
+===============================================
+
+1. Job Fails to Start
+---------------------
+Symptoms:
+- Job stuck in "Queued" or "Failed to start".
+- Error: "Worker pool failed to initialize"
+
+Steps:
+1. Check project quota (e.g., CPUs, IP addresses, regional resources).
+2. Inspect IAM permissions — service account must have roles/dataflow.worker and roles/storage.objectViewer.
+3. Check for subnet or network misconfiguration.
+4. Validate job template path (if using templates).
+5. Look at Dataflow logs in Cloud Logging under "dataflow.googleapis.com".
+
+2. Workers Not Scaling or Too Few
+---------------------------------
+Symptoms:
+- Job running slowly, low throughput.
+- Autoscaling not triggering new workers.
+
+Steps:
+1. Review job parameters — check --maxWorkers setting.
+2. Ensure quotas allow more workers (compute engine CPUs).
+3. Check pipeline logic for backpressure or long-running transforms.
+4. Confirm regional availability of resources.
+
+3. Job Crashes or Fails Mid-Execution
+-------------------------------------
+Symptoms:
+- Job status: FAILED.
+- Error in logs: "java.lang.RuntimeException" or "Pipeline failed to complete".
+
+Steps:
+1. Go to the Dataflow job UI → "Logs".
+2. Identify failing stage.
+3. Look for null pointer exceptions, misconfigured transforms, or resource not found.
+4. Ensure external resources (BigQuery, Pub/Sub, GCS) are available and accessible.
+5. Check memory usage if using heavy joins, shuffles, or windowing.
+
+4. Data Not Written to Sink
+---------------------------
+Symptoms:
+- No output in BigQuery, GCS, or Pub/Sub.
+
+Steps:
+1. Confirm sink transform exists and is connected to pipeline output.
+2. Check IAM permissions on sink (write access).
+3. Validate sink parameters (e.g., table name, bucket path).
+4. Inspect worker logs for write-related errors.
+
+5. Pipeline Stuck in "Running"
+-----------------------------
+Symptoms:
+- No progress in job graph or metrics.
+- Stuck stages.
+
+Steps:
+1. Use the job graph to identify slow or hanging stages.
+2. Look for skewed keys or large windows causing bottlenecks.
+3. Check logs for "backpressure" or "bundle too large" warnings.
+4. Review input data size and distribution.
+5. Restart with smaller test dataset to isolate problem.
+
+6. Pipeline Performance is Poor
+-------------------------------
+Symptoms:
+- Job takes longer than expected.
+- Low throughput or high latency.
+
+Steps:
+1. Monitor metrics: system.latency, elements/sec, CPU utilization.
+2. Optimize transforms (e.g., avoid GroupByKey on hot keys).
+3. Use combiner functions or side inputs to reduce load.
+4. Increase parallelism with autoscaling and higher --maxWorkers.
+5. Use Streaming Engine (for streaming jobs).
+
+7. Streaming Job Loses Data
+---------------------------
+Symptoms:
+- Missing events, delayed writes.
+
+Steps:
+1. Ensure Pub/Sub subscription ack timeout is reasonable.
+2. Confirm Dataflow checkpointing is active and successful.
+3. Check for dead-letter or retry mechanisms.
+4. Monitor logs for dropped or late data warnings.
+5. Tune windowing and trigger settings to handle late data.
+
+Useful Diagnostic Tools
+-----------------------
+- Cloud Logging (dataflow.googleapis.com logs)
+- Job Graph Viewer in Dataflow UI
+- Stackdriver Error Reporting
+- Metrics Explorer (elements/sec, CPU utilization, memory, lag)
+- Dataflow SQL for quick pipeline checks
+
