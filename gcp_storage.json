@@ -1,0 +1,23 @@
+{
+  "name": "[GCP] Cloud Storage Availability Alert",
+  "type": "metric alert",
+  "query": "avg(last_5m):avg:gcp.storage.api.request_count{service:storage.googleapis.com,response_class:success} by {bucket_name} / avg:gcp.storage.api.request_count{service:storage.googleapis.com} by {bucket_name} * 100 < 95",
+  "message": "GCP Cloud Storage availability for bucket {{bucket_name.name}} has dropped below 95%\n\nNotify: @slack-your-channel @email-your-team@example.com",
+  "tags": ["service:gcp", "resource:cloud-storage", "team:gcp"],
+  "options": {
+    "thresholds": {
+      "critical": 95,
+      "critical_recovery": 97
+    },
+    "notify_audit": false,
+    "locked": false,
+    "timeout_h": 0,
+    "new_host_delay": 300,
+    "require_full_window": true,
+    "notify_no_data": false,
+    "renotify_interval": 120,
+    "escalation_message": "GCP Storage availability for {{bucket_name.name}} remains critical at {{value}}%",
+    "evaluation_delay": 900,
+    "include_tags": true
+  }
+}
