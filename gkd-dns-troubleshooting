@@ -1,0 +1,199 @@
+DNS issues in Google Kubernetes Engine (GKE) can disrupt service discovery, inter-pod communication, and external connectivity. Below are common DNS troubleshooting scenarios along with detailed resolution steps.
+
+1. Pods Cannot Resolve Internal Kubernetes Services
+Symptoms:
+
+Pods fail to resolve service-name.namespace.svc.cluster.local.
+
+nslookup or dig commands from a pod return NXDOMAIN or time out.
+
+Possible Causes:
+
+CoreDNS/Kube-DNS is not running or misconfigured.
+
+Network policies block DNS traffic.
+
+Incorrect /etc/resolv.conf in pods.
+
+Resolution Steps:
+
+Check CoreDNS/Kube-DNS Pods:
+
+sh
+kubectl get pods -n kube-system -l k8s-app=kube-dns
+Ensure they are in Running state.
+
+Verify CoreDNS Logs:
+
+sh
+kubectl logs -n kube-system <coredns-pod-name>
+Look for errors like connection refused or loop detected.
+
+Check /etc/resolv.conf in a Pod:
+
+sh
+kubectl exec -it <pod-name> -- cat /etc/resolv.conf
+Ensure it includes the correct DNS server (e.g., 10.96.0.10 for default K8s DNS).
+
+Test DNS Resolution from a Pod:
+
+sh
+kubectl exec -it <pod-name> -- nslookup kubernetes.default
+If it fails, check Network Policies blocking UDP/TCP port 53.
+
+Restart CoreDNS Deployment (if needed):
+
+sh
+kubectl rollout restart deployment -n kube-system coredns
+2. Pods Cannot Resolve External Domains (e.g., google.com)
+Symptoms:
+
+Pods can resolve internal services but fail to resolve public domains.
+
+nslookup google.com returns SERVFAIL or times out.
+
+Possible Causes:
+
+Missing upstream DNS in CoreDNS config.
+
+VPC firewall rules block outbound DNS (UDP/TCP 53).
+
+Node-local DNS misconfiguration.
+
+Resolution Steps:
+
+Check CoreDNS ConfigMap:
+
+sh
+kubectl get configmap -n kube-system coredns -o yaml
+Ensure it has a forwarder to Google’s DNS (8.8.8.8 or 169.254.169.254 for GCP metadata).
+
+Test DNS from a Node:
+
+sh
+gcloud compute ssh <node-name>
+nslookup google.com
+If this fails, check VPC firewall rules for DNS egress.
+
+Allow DNS Traffic in Firewall:
+Ensure firewall rules allow:
+
+Outbound UDP/TCP 53 to 8.8.8.8/8.8.4.4 or 169.254.169.254.
+
+Enable NodeLocal DNSCache (Optional):
+If using GKE 1.15+, enable NodeLocal DNSCache to improve reliability:
+
+sh
+gcloud container clusters update <cluster-name> --enable-nodelocal-dns-cache
+3. Intermittent DNS Resolution Failures (Timeouts)
+Symptoms:
+
+DNS queries sometimes fail with timeouts.
+
+High latency in DNS responses.
+
+Possible Causes:
+
+CoreDNS pod resource limits too low.
+
+High DNS query load.
+
+Network congestion.
+
+Resolution Steps:
+
+Check CoreDNS Resource Usage:
+
+sh
+kubectl top pods -n kube-system -l k8s-app=kube-dns
+Increase CPU/Memory limits if near max.
+
+Scale CoreDNS Replicas:
+
+sh
+kubectl scale -n kube-system deployment/coredns --replicas=3
+(Adjust based on cluster size.)
+
+Enable NodeLocal DNSCache (Reduces Load):
+
+sh
+gcloud container clusters update <cluster-name> --enable-nodelocal-dns-cache
+4. Custom DNS Entries Not Working (CoreDNS ConfigMap Issues)
+Symptoms:
+
+Custom hostnames (e.g., db.internal) fail to resolve.
+
+CoreDNS logs show parsing errors.
+
+Possible Causes:
+
+Incorrect Corefile configuration.
+
+Missing hosts plugin entries.
+
+Resolution Steps:
+
+Edit CoreDNS ConfigMap:
+
+sh
+kubectl edit configmap -n kube-system coredns
+Add Custom DNS Entries (Example):
+
+yaml
+data:
+  Corefile: |
+    .:53 {
+        hosts {
+            10.100.10.5 db.internal
+            fallthrough
+        }
+        forward . /etc/resolv.conf
+    }
+Restart CoreDNS:
+
+sh
+kubectl rollout restart deployment -n kube-system coredns
+5. GKE Private Cluster DNS Issues (No External Resolution)
+Symptoms:
+
+Pods in a private GKE cluster cannot resolve public domains.
+
+nslookup google.com fails.
+
+Possible Causes:
+
+Missing Cloud NAT or firewall rules for private clusters.
+
+No DNS peering with Google’s 169.254.169.254.
+
+Resolution Steps:
+
+Ensure Cloud NAT is Configured:
+
+Verify NAT gateway exists for the subnet.
+
+sh
+gcloud compute routers nats list --router=<router-name>
+Allow DNS Egress in Firewall:
+
+sh
+gcloud compute firewall-rules create allow-dns-egress \
+  --direction=EGRESS \
+  --action=ALLOW \
+  --rules=udp:53,tcp:53 \
+  --destination-ranges=8.8.8.8/32,8.8.4.4/32,169.254.169.254/32
+Verify DNS Forwarding in VPC:
+Ensure 169.254.169.254 is reachable from nodes.
+
+Conclusion
+DNS issues in GKE can stem from misconfigurations in CoreDNS, network policies, or GCP networking. Use the steps above to systematically diagnose and resolve common DNS failures.
+
+For persistent issues, check:
+
+GKE cluster logs (gcloud logging read)
+
+GCP VPC Network Peering & Firewall Logs
+
+CoreDNS metrics (kubectl get --raw /api/v1/namespaces/kube-system/services/coredns:monitoring/proxy/metrics)
+
+
