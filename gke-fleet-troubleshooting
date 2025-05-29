@@ -1,0 +1,160 @@
+Below is a structured guide to common Google Kubernetes Engine (GKE) Fleet issues, along with detailed troubleshooting steps. A downloadable document (PDF/DOCX) is also provided at the end.
+
+1. Fleet Membership Registration Failures
+Symptoms:
+
+Cluster fails to register with Fleet (gcloud container fleet memberships list shows ERROR).
+
+kubectl get memberships.hub.gke.io returns NotReady.
+
+Possible Causes:
+
+Missing IAM permissions (gkehub.admin, serviceusage.serviceUsageAdmin).
+
+Network connectivity issues (private clusters without proper peering/NAT).
+
+Invalid kubeconfig or expired credentials.
+
+Resolution Steps:
+Check IAM Permissions:
+
+sh
+gcloud projects get-iam-policy <PROJECT_ID> --flatten="bindings[].members" --format="table(bindings.role)"
+Ensure the principal (user/service account) has:
+
+roles/gkehub.admin
+
+roles/serviceusage.serviceUsageAdmin
+
+Verify Fleet API is Enabled:
+
+sh
+gcloud services enable gkehub.googleapis.com
+Check Connectivity for Private Clusters:
+
+Ensure Cloud NAT is configured for egress traffic.
+
+Verify VPC Peering exists between the cluster and Fleet project.
+
+Re-register the Cluster Manually:
+
+sh
+gcloud container fleet memberships delete <MEMBERSHIP_NAME>  
+gcloud container fleet memberships register <MEMBERSHIP_NAME> \  
+  --gke-cluster <LOCATION>/<CLUSTER_NAME> \  
+  --enable-workload-identity  
+2. Fleet Workload Identity Federation Issues
+Symptoms:
+
+Pods fail to authenticate with GCP services (e.g., Cloud Storage, Pub/Sub).
+
+Errors like PermissionDenied or IAM Service Account Not Found.
+
+Resolution Steps:
+Verify Workload Identity is Enabled:
+
+sh
+gcloud container clusters describe <CLUSTER_NAME> --zone <ZONE> | grep workloadIdentity
+Ensure workloadIdentityConfig is present.
+
+Check IAM Bindings for GSA & KSA:
+
+sh
+gcloud iam service-accounts add-iam-policy-binding \  
+  --role roles/iam.workloadIdentityUser \  
+  --member "serviceAccount:<PROJECT_ID>.svc.id.goog[<NAMESPACE>/<KSA>]" \  
+  <GSA_EMAIL>
+Test Workload Identity in a Pod:
+
+sh
+kubectl run --rm -it test-pod --image=google/cloud-sdk:slim -- /bin/bash
+gcloud auth list  # Should show the GSA
+3. Fleet Multi-Cluster Services (MCS) Not Working
+Symptoms:
+
+Services are not discoverable across clusters.
+
+kubectl get serviceexports shows no endpoints.
+
+Resolution Steps:
+Verify MCS is Enabled:
+
+sh
+gcloud container fleet multi-cluster-services describe
+Ensure enabled: true.
+
+Check ServiceExport Resource:
+
+sh
+kubectl get serviceexports -n <NAMESPACE>
+If missing, create one:
+
+yaml
+apiVersion: net.gke.io/v1
+kind: ServiceExport
+metadata:
+  name: <SERVICE_NAME>
+  namespace: <NAMESPACE>
+Inspect Endpoint Slices:
+
+sh
+kubectl get endpointslices -n <NAMESPACE>
+If empty, check kubectl describe service <SERVICE_NAME>.
+
+4. Config Sync (Anthos Config Management) Failing in Fleet
+Symptoms:
+
+nomos status shows ERROR.
+
+kubectl get rootsync -n config-management-system reports Stalled.
+
+Resolution Steps:
+Check Config Sync Logs:
+
+sh
+kubectl logs -n config-management-system -l app=config-management-operator
+Validate Git Repo Credentials:
+
+Ensure SSH keys or Cloud Source Repositories are correctly linked.
+
+For private repos, verify Secret exists:
+
+sh
+kubectl get secret -n config-management-system git-creds
+Force Reconciliation:
+
+sh
+kubectl patch rootsync root-sync -n config-management-system --type=merge -p '{"spec":{"override":{"resources":[{"kind":"GitRepo","name":"root-sync","force":true}]}}}'
+5. Fleet Observability (Logs/Metrics) Not Working
+Symptoms:
+
+No logs in Cloud Logging from Fleet clusters.
+
+Prometheus metrics missing in Cloud Monitoring.
+
+Resolution Steps:
+Verify Monitoring & Logging are Enabled:
+
+sh
+gcloud container clusters describe <CLUSTER_NAME> | grep -E "monitoring|logging"
+Check IAM for GKE Observability:
+
+sh
+gcloud projects add-iam-policy-binding <PROJECT_ID> \
+  --member=serviceAccount:<PROJECT_NUMBER>@cloudservices.gserviceaccount.com \
+  --role=roles/monitoring.metricWriter
+Restart Observability Agents:
+
+sh
+kubectl rollout restart -n kube-system deployment/gke-metrics-agent
+Downloadable Troubleshooting Guide
+📥 Download as PDF (Placeholder link)
+📥 Download as DOCX
+
+(Note: Replace links with an actual hosted document or use Google Docs export.)
+
+Final Recommendations
+Use gcloud container fleet operations list to track Fleet operations.
+
+Enable Fleet Audit Logs in Cloud Logging.
+
