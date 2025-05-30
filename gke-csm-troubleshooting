@@ -1,0 +1,105 @@
+GKE Cloud Service Mesh Troubleshooting Guide
+(Google Kubernetes Engine - Anthos Service Mesh)
+
+1. Installation & Setup Issues
+Symptoms:
+ASM CLI (asmcli) fails with errors
+
+istiod pods in CrashLoopBackOff
+
+Resolution:
+Verify prerequisites:
+
+gcloud container clusters describe CLUSTER --zone ZONE | grep -E "workloadIdentity|meshCertificates"
+Ensure workloadIdentity and meshCertificates are enabled.
+
+Check IAM roles:
+
+gcloud projects get-iam-policy PROJECT_ID | grep -E "roles/meshconfig.admin|roles/gkehub.admin"
+Required: roles/meshconfig.admin, roles/gkehub.admin.
+
+Reinstall ASM:
+
+./asmcli install --project_id PROJECT --cluster_name CLUSTER --mode install --enable_all
+2. Sidecar Injection Failures
+Symptoms:
+Pods start without istio-proxy
+
+mutatingwebhookconfiguration errors
+
+Resolution:
+Label namespace for injection:
+
+kubectl label namespace NAMESPACE istio-injection=enabled
+Check webhook configuration:
+
+kubectl get mutatingwebhookconfiguration istio-sidecar-injector -o yaml
+Manual injection test:
+
+istioctl kube-inject -f deployment.yaml | kubectl apply -f -
+3. mTLS Authentication Failures
+Symptoms:
+503 Upstream Connect Error
+
+PeerAuthentication rejects traffic
+
+Resolution:
+Verify mTLS mode:
+
+kubectl get peerauthentication --all-namespaces
+Check certificates:
+
+istioctl proxy-status
+istioctl authn tls-check POD.NAMESPACE
+Update PeerAuthentication:
+
+yaml
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+spec:
+  mtls:
+    mode: STRICT
+4. Traffic Routing Problems
+Symptoms:
+VirtualService rules ignored
+
+404 errors on valid routes
+
+Resolution:
+Debug routes:
+
+istioctl proxy-config routes POD --name ROUTE
+Validate VirtualService:
+
+kubectl get virtualservice -o yaml
+Check Envoy config:
+
+kubectl exec POD -c istio-proxy -- pilot-agent request GET config_dump
+5. Missing Observability Data
+Symptoms:
+No metrics in Cloud Monitoring
+
+Traces missing in Cloud Trace
+
+Resolution:
+Enable telemetry:
+
+kubectl get servicemonitor -n istio-system
+Verify IAM roles:
+
+gcloud projects add-iam-policy-binding PROJECT \
+  --member=serviceAccount:PROJECT_NUMBER-compute@developer.gserviceaccount.com \
+  --role=roles/monitoring.metricWriter
+Restart telemetry pods:
+
+kubectl rollout restart deployment -n istio-system istio-telemetry
+
+Final Notes
+For persistent issues, collect:
+
+istioctl bug-report
+Contact GCP Support:
+
+gcloud alpha support cases create --issue-type TECHNICAL --category "Service Mesh"
