@@ -1,0 +1,137 @@
+
+GKE NETWORKING TROUBLESHOOTING SCENARIOS & RESOLUTION STEPS
+===========================================================
+
+1. Pods Cannot Reach Each Other
+-------------------------------
+Symptoms:
+- Services time out
+- Inter-pod communication fails
+
+Causes:
+- NetworkPolicy blocking traffic
+- DNS resolution failure
+- Misconfigured Service or Pod IP range overlap
+
+Resolutions:
+- Check for active NetworkPolicies:
+  kubectl get networkpolicy --all-namespaces
+
+- Verify DNS resolution inside a pod:
+  kubectl exec -it <pod> -- nslookup <service-name>
+
+- Confirm non-overlapping Pod CIDR ranges:
+  gcloud container clusters describe <cluster-name> --region <region>
+
+2. Service IP Not Accessible
+----------------------------
+Symptoms:
+- ClusterIP service doesn't respond
+
+Causes:
+- Missing endpoints
+- Misconfigured selectors
+- Wrong port/protocol in service
+
+Resolutions:
+- Confirm service has endpoints:
+  kubectl get endpoints <service-name>
+
+- Check label match:
+  kubectl get pods --show-labels
+  kubectl describe service <service-name>
+
+3. External Access Not Working
+------------------------------
+Symptoms:
+- NodePort or LoadBalancer services unreachable externally
+
+Causes:
+- Missing firewall rules
+- No external IP
+- Misconfigured ingress
+
+Resolutions:
+- Check LoadBalancer status:
+  kubectl get svc <service-name>
+
+- Verify GCP firewall rules:
+  gcloud compute firewall-rules list --filter="network:<VPC-NAME>"
+
+- Confirm node external IP:
+  kubectl get nodes -o wide
+
+4. DNS Resolution Fails in Pods
+-------------------------------
+Symptoms:
+- Apps can't resolve hostnames
+
+Causes:
+- CoreDNS pod issue
+- /etc/resolv.conf misconfigured
+
+Resolutions:
+- Check CoreDNS status:
+  kubectl get pods -n kube-system -l k8s-app=kube-dns
+  kubectl logs -n kube-system -l k8s-app=kube-dns
+
+- Run DNS debug pod:
+  kubectl run -it --rm --restart=Never busybox --image=busybox:1.28 -- nslookup google.com
+
+5. Ingress Not Routing Traffic
+------------------------------
+Symptoms:
+- LoadBalancer up but returns 404/timeout
+
+Causes:
+- Misconfigured ingress
+- Backend services not ready
+
+Resolutions:
+- Describe the ingress:
+  kubectl describe ingress <name>
+
+- Check ingress controller logs:
+  kubectl logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx
+
+6. Node-to-Pod or Pod-to-External VPC Communication Fails
+----------------------------------------------------------
+Symptoms:
+- External GCP services unreachable
+
+Causes:
+- Routes or NAT misconfigured
+- Firewall rules missing
+
+Resolutions:
+- Check IP aliasing:
+  gcloud compute networks subnets describe <subnet-name>
+
+- Check Cloud NAT setup:
+  gcloud compute routers nats list --router=<router-name> --region=<region>
+
+7. NetworkPolicy Blocking Ingress/Egress
+----------------------------------------
+Symptoms:
+- Connections dropped silently
+
+Causes:
+- Policies block traffic
+
+Resolutions:
+- Temporarily delete policies:
+  kubectl delete networkpolicy <policy-name>
+
+- Use simulation tools like Calico trace
+
+8. MTU or Fragmentation Issues
+------------------------------
+Symptoms:
+- Long payloads timeout
+
+Causes:
+- MTU mismatch
+
+Resolutions:
+- Test with large ping:
+  ping -s 1472 -M do <external-ip>
