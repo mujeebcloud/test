@@ -1,0 +1,160 @@
+
+Critical GKE Metrics & Troubleshooting Scenarios
+===============================================
+
+1. kube_pod_container_status_restarts_total
+-------------------------------------------
+What It Measures:
+- Total number of container restarts.
+
+Why It Matters:
+- Frequent restarts may indicate application crashes or misconfiguration.
+
+Troubleshooting:
+- kubectl describe pod <pod-name>
+- kubectl logs <pod-name> --previous
+- Look for CrashLoopBackOff or OOMKilled
+
+Resolution:
+- Fix crash reason (code/config)
+- Adjust liveness probes
+- Tune resource limits
+
+2. container_memory_usage_bytes
+-------------------------------
+What It Measures:
+- Memory usage per container.
+
+Why It Matters:
+- High memory usage may cause OOM kills or node pressure.
+
+Troubleshooting:
+- kubectl top pod
+- Check for OOMKilled status
+
+Resolution:
+- Increase memory limits or request
+- Optimize memory usage
+
+3. container_cpu_usage_seconds_total
+------------------------------------
+What It Measures:
+- CPU usage per container.
+
+Why It Matters:
+- CPU throttling can degrade performance.
+
+Troubleshooting:
+- kubectl top pod
+- Check for CPU spikes and throttling
+
+Resolution:
+- Increase CPU limits/requests
+- Implement autoscaling
+
+4. kube_node_status_condition{condition="Ready"}
+------------------------------------------------
+What It Measures:
+- Node availability status.
+
+Why It Matters:
+- Non-ready nodes can cause scheduling failures.
+
+Troubleshooting:
+- kubectl get nodes
+- kubectl describe node <node-name>
+
+Resolution:
+- Investigate systemd/kubelet
+- Restart kubelet or drain node
+
+5. kube_pod_status_phase
+------------------------
+What It Measures:
+- Pod lifecycle phase.
+
+Why It Matters:
+- Many pods in Pending/Failed = scheduling or resource issues.
+
+Troubleshooting:
+- kubectl describe pod <pod-name>
+
+Resolution:
+- Adjust node pools
+- Validate PVCs/storage classes
+
+6. kube_deployment_status_replicas_unavailable
+----------------------------------------------
+What It Measures:
+- Number of unavailable replicas.
+
+Why It Matters:
+- Indicates deployment rollout issues.
+
+Troubleshooting:
+- kubectl rollout status deployment <deployment-name>
+- Check logs
+
+Resolution:
+- Fix deployment/image errors
+- Ensure resources are available
+
+7. kubelet_volume_stats_used_bytes
+----------------------------------
+What It Measures:
+- Volume disk usage.
+
+Why It Matters:
+- Full volumes can cause pod crashes.
+
+Troubleshooting:
+- kubectl describe pvc <pvc-name>
+
+Resolution:
+- Expand volume
+- Cleanup data
+
+8. node_disk_utilization
+------------------------
+What It Measures:
+- Disk space usage on nodes.
+
+Why It Matters:
+- Disk pressure evicts pods.
+
+Troubleshooting:
+- kubectl describe node <node-name>
+
+Resolution:
+- Cleanup disk
+- Resize node disk
+
+9. kube_horizontalpodautoscaler_status_desired_replicas
+-------------------------------------------------------
+What It Measures:
+- Desired vs current replica count by HPA.
+
+Why It Matters:
+- Sudden scaling = load spikes or instability.
+
+Troubleshooting:
+- kubectl get hpa
+
+Resolution:
+- Tune HPA thresholds
+- Validate node resources
+
+10. gke_cluster_autoscaler_unschedulable_pods_count
+---------------------------------------------------
+What It Measures:
+- Number of unschedulable pods.
+
+Why It Matters:
+- Indicates pending pods waiting for node provisioning.
+
+Troubleshooting:
+- kubectl get pods --field-selector=status.phase=Pending
+
+Resolution:
+- Increase max node pool size
+- Check autoscaler permissions and limits
