@@ -1,0 +1,165 @@
+
+GKE Pods Troubleshooting Scenarios & Remediation
+================================================
+
+1. Pod Stuck in `Pending` State
+-------------------------------
+Symptoms:
+- Pod status is `Pending`.
+
+Causes:
+- No available nodes with sufficient resources.
+- Node selector/toleration mismatch.
+- Incorrect storage class or volume claim.
+
+Troubleshooting Steps:
+1. Check pod events:
+   kubectl describe pod <pod-name> -n <namespace>
+2. Verify node resources:
+   kubectl describe nodes
+3. Check for taints/tolerations:
+   kubectl get nodes -o json | jq '.items[].spec.taints'
+4. Inspect PVC status (if applicable):
+   kubectl get pvc -n <namespace>
+
+Resolution:
+- Adjust resource requests/limits.
+- Modify/remove nodeSelectors/affinities.
+- Ensure valid storage class and PVC.
+
+2. Pod Stuck in `CrashLoopBackOff`
+----------------------------------
+Symptoms:
+- Continuous restarts.
+- `CrashLoopBackOff` status.
+
+Causes:
+- Application crashes.
+- Misconfigured readiness/liveness probes.
+- ConfigMap/Secret issues.
+
+Troubleshooting Steps:
+1. View logs:
+   kubectl logs <pod-name> -n <namespace> --previous
+2. Describe pod:
+   kubectl describe pod <pod-name> -n <namespace>
+3. Check exit codes:
+   kubectl get pod <pod-name> -o json | jq '.status.containerStatuses[] | {name, lastState, state}'
+
+Resolution:
+- Fix app or configs.
+- Adjust probes.
+- Check volumes and secrets.
+
+3. Pod in `ImagePullBackOff` / `ErrImagePull`
+---------------------------------------------
+Symptoms:
+- Stuck pulling image.
+
+Causes:
+- Invalid image name/tag.
+- Private registry access failure.
+- Network issues.
+
+Troubleshooting Steps:
+1. Describe pod for error message:
+   kubectl describe pod <pod-name>
+2. Check registry access.
+
+Resolution:
+- Correct image name/tag.
+- Add imagePullSecret:
+   kubectl create secret docker-registry ...
+- Link secret to pod/service account.
+
+4. Pod OOMKilled
+----------------
+Symptoms:
+- Container killed with OOMKilled.
+
+Causes:
+- Memory overuse.
+
+Troubleshooting Steps:
+1. Describe pod.
+2. Check termination reason:
+   kubectl get pod <pod-name> -o json | jq '.status.containerStatuses[].lastState'
+
+Resolution:
+- Increase memory limits.
+- Optimize app memory use.
+
+5. Pod Not Ready
+----------------
+Symptoms:
+- READY column shows `0/1`.
+
+Causes:
+- Failing probes.
+- Application startup delay.
+
+Troubleshooting Steps:
+1. Describe pod.
+2. Check probe failures and logs.
+
+Resolution:
+- Fix app or extend startup time.
+- Adjust probe config.
+
+6. Pod Cannot Access External Services
+--------------------------------------
+Symptoms:
+- DNS/network errors.
+
+Causes:
+- Network policy block.
+- CNI/CoreDNS issues.
+
+Troubleshooting Steps:
+1. Test DNS:
+   kubectl exec -it <pod> -- nslookup google.com
+2. Test connectivity:
+   kubectl exec -it <pod> -- curl https://example.com
+3. Check CoreDNS logs:
+   kubectl logs -n kube-system -l k8s-app=kube-dns
+
+Resolution:
+- Fix NetworkPolicies.
+- Restart CoreDNS.
+- Check CNI config.
+
+7. Pods Not Scheduled on Expected Node Pool
+-------------------------------------------
+Symptoms:
+- Pods not scheduled on desired nodes.
+
+Causes:
+- Affinity/anti-affinity mismatch.
+- Node selectors/labels incorrect.
+
+Troubleshooting Steps:
+1. Describe pod.
+2. Verify affinity and node labels.
+
+Resolution:
+- Correct affinity/selector rules.
+
+8. Pods Evicted
+---------------
+Symptoms:
+- Pods terminated with `Evicted`.
+
+Causes:
+- Node memory/disk pressure.
+- PDBs exceeded.
+
+Troubleshooting Steps:
+1. Describe pod.
+2. Check node resources:
+   kubectl top nodes
+
+Resolution:
+- Adjust requests/limits.
+- Use higher-resource nodes.
+- Tune eviction tolerations.
+
