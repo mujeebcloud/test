@@ -1,0 +1,121 @@
+
+Most Common GKE Fleet Problem Scenarios & Troubleshooting Steps
+=================================================================
+
+1. Cluster Not Showing in Fleet
+-------------------------------
+Symptoms: Registered cluster does not appear under `gcloud container fleet list`.
+
+Troubleshooting Steps:
+- Verify registration:
+  gcloud container fleet memberships list
+- Check if the cluster was registered:
+  gcloud container hub memberships list
+- If missing, re-register:
+  gcloud container hub memberships register CLUSTER_NAME \
+    --gke-cluster=REGION/CLUSTER_NAME \
+    --enable-workload-identity
+- Ensure Workload Identity is properly enabled:
+  gcloud container clusters describe CLUSTER_NAME --region=REGION \
+    --format="value(workloadIdentityConfig.workloadPool)"
+
+2. Fleet Policy Sync Issues (Config Sync)
+-----------------------------------------
+Symptoms: Config Sync not syncing resources from Git to the cluster.
+
+Troubleshooting Steps:
+- Check Config Sync status:
+  kubectl get rootsync -n config-management-system
+- Check pod logs:
+  kubectl logs -n config-management-system deployment/root-reconciler
+- Validate Git repo access and correctness.
+- Look for Git errors, misconfigured RBAC, or policy issues.
+
+3. Anthos Service Mesh (ASM) Not Installing Properly
+-----------------------------------------------------
+Symptoms: ASM dashboard shows uninitialized or mesh connectivity fails.
+
+Troubleshooting Steps:
+- Validate istiod and istio-ingressgateway pods:
+  kubectl get pods -n istio-system
+- Check mesh status:
+  gcloud container fleet mesh describe
+- Confirm mesh_id is set and firewall is open.
+- Check IAM permissions and service enablement.
+
+4. IAM Permission Denied Errors on Fleet Features
+-------------------------------------------------
+Symptoms: Errors like PERMISSION_DENIED when accessing fleet resources.
+
+Troubleshooting Steps:
+- Ensure proper IAM roles:
+  roles/gkehub.admin, roles/gkehub.viewer, roles/gkehub.connect
+- Run:
+  gcloud projects get-iam-policy PROJECT_ID
+- Check gkehub service:
+  gcloud services list --enabled | grep gkehub
+
+5. Fleet Scoping Issues (Project/Region Misalignment)
+-----------------------------------------------------
+Symptoms: Resources not found or conflicting cluster memberships.
+
+Troubleshooting Steps:
+- Verify consistent use of project/region.
+- Check cluster scope:
+  gcloud container clusters list --project=PROJECT_ID --region=REGION
+
+6. Multi-Cluster Ingress or Services Not Working
+------------------------------------------------
+Symptoms: Load balancer not distributing traffic across clusters.
+
+Troubleshooting Steps:
+- Check MultiClusterIngress and MultiClusterService:
+  kubectl get multiclusteringress -A
+  kubectl get multiclusterservice -A
+- Confirm service APIs are enabled:
+  gcloud services enable multiclusteringress.googleapis.com
+
+7. Fleet Policy Controller Failing to Enforce Policies
+-------------------------------------------------------
+Symptoms: Gatekeeper or OPA policies not triggering.
+
+Troubleshooting Steps:
+- Check constraint status:
+  kubectl get constrainttemplates
+  kubectl get constraints
+- Check Policy Controller status:
+  gcloud container fleet policycontroller describe
+- Inspect controller logs:
+  kubectl logs -n gatekeeper-system -l control-plane=controller-manager
+
+8. Hub Connection Errors (Connect Agent Issues)
+-----------------------------------------------
+Symptoms: connect-agent reports disconnection or expiration.
+
+Troubleshooting Steps:
+- Inspect connect-agent pod logs:
+  kubectl logs -n gke-connect -l app=gke-connect-agent
+- Verify secret:
+  kubectl get secret gke-connect-credentials -n gke-connect
+- Rotate credentials if needed.
+
+9. Cluster Upgrade Problems with Fleet Management
+-------------------------------------------------
+Symptoms: Upgrades fail or don’t trigger when managed via Fleet.
+
+Troubleshooting Steps:
+- Check if release channels are enabled.
+- Describe fleet-managed clusters:
+  gcloud container fleet clusters describe CLUSTER_NAME
+
+10. Missing Cluster Labels or Annotations
+-----------------------------------------
+Symptoms: Policies or features not applying.
+
+Troubleshooting Steps:
+- Check labels:
+  gcloud container clusters describe CLUSTER_NAME --region=REGION \
+    --format="value(resourceLabels)"
+- Add missing labels:
+  gcloud container clusters update CLUSTER_NAME \
+    --region=REGION --update-labels=fleet-scope=prod
