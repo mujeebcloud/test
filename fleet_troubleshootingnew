@@ -1,0 +1,291 @@
+GKE Fleet Troubleshooting Scenarios and Remediation Steps
+Table of Contents
+Fleet API and Access Issues
+
+Cluster Registration Problems
+
+Membership Synchronization Errors
+
+Config Management Issues
+
+Policy Controller Failures
+
+Service Mesh Connectivity Problems
+
+Multi-Cluster Service (MCS) Issues
+
+Fleet Observability Problems
+
+Resource Quota and Limit Issues
+
+Network Connectivity Between Clusters
+
+Fleet API and Access Issues
+Scenario 1: Fleet API not enabled
+Symptoms:
+
+Error when trying to create or manage fleets: "Fleet API is not enabled"
+
+Fleet-related operations fail with permission errors
+
+Remediation Steps:
+
+Enable the GKE Hub API:
+
+bash
+gcloud services enable gkehub.googleapis.com
+Verify API is enabled:
+
+bash
+gcloud services list --enabled --filter="name:gkehub.googleapis.com"
+Wait 5-10 minutes for propagation and retry operations
+
+Scenario 2: Insufficient IAM permissions
+Symptoms:
+
+"Permission denied" errors when managing fleets
+
+Inability to view or modify fleet resources
+
+Remediation Steps:
+
+Grant the appropriate IAM roles:
+
+bash
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member="user:USER_EMAIL" \
+  --role="roles/gkehub.admin"
+For more granular control, use:
+
+roles/gkehub.viewer (read-only)
+
+roles/gkehub.editor (modify but not manage members)
+
+Verify permissions:
+
+bash
+gcloud projects get-iam-policy PROJECT_ID --flatten="bindings[].members" \
+  --filter="bindings.members:USER_EMAIL"
+Cluster Registration Problems
+Scenario 3: Cluster registration fails
+Symptoms:
+
+Cluster remains in "Registering" state for extended period
+
+Error messages about connectivity during registration
+
+Remediation Steps:
+
+Verify cluster meets requirements:
+
+GKE version 1.20+
+
+Workload Identity enabled
+
+Proper IAM permissions
+
+Reattempt registration:
+
+bash
+gcloud container hub memberships unregister CLUSTER_NAME \
+  --gke-cluster=LOCATION/CLUSTER_NAME
+
+gcloud container hub memberships register CLUSTER_NAME \
+  --gke-cluster=LOCATION/CLUSTER_NAME \
+  --enable-workload-identity
+Check registration status:
+
+bash
+gcloud container hub memberships describe CLUSTER_NAME
+Examine logs:
+
+bash
+gcloud logging read "resource.type=gke_hub_membership AND resource.labels.membership_id=CLUSTER_NAME" --format=json
+Membership Synchronization Errors
+Scenario 4: Membership status shows "Error"
+Symptoms:
+
+Membership in error state in Fleet UI
+
+Last sync timestamp not updating
+
+Remediation Steps:
+
+Check detailed error:
+
+bash
+gcloud container hub memberships describe CLUSTER_NAME --format="value(status)"
+Common fixes:
+
+For connectivity issues, verify cluster network connectivity to Google APIs
+
+For permission issues, ensure GKE Connect agent has proper IAM roles
+
+For quota issues, check project quotas
+
+Reconnect the cluster:
+
+bash
+gcloud container hub memberships generate-connect-manifest CLUSTER_NAME | kubectl apply -f -
+Config Management Issues
+Scenario 5: Config sync not applying manifests
+Symptoms:
+
+Config sync status shows errors
+
+Resources not being created in member clusters
+
+Remediation Steps:
+
+Check config sync status:
+
+bash
+nomos status --contexts=CLUSTER_CONTEXT
+Examine root sync:
+
+bash
+kubectl get rootsync -n config-management-system -o yaml
+Common fixes:
+
+Fix syntax errors in configs
+
+Ensure repo accessibility from cluster
+
+Verify sync branch and directory are correct
+
+Check for admission webhook blocks
+
+Policy Controller Failures
+Scenario 6: Policy violations not being reported
+Symptoms:
+
+Expected policy violations not appearing
+
+Policy controller pods in crash loop
+
+Remediation Steps:
+
+Check policy controller status:
+
+bash
+kubectl get gatekeeper-system -n gatekeeper-system
+Examine logs:
+
+bash
+kubectl logs -n gatekeeper-system -l control-plane=controller-manager
+Verify constraint templates:
+
+bash
+kubectl get constrainttemplates
+Service Mesh Connectivity Problems
+Scenario 7: Cross-cluster service discovery failing
+Symptoms:
+
+Services in one cluster not reachable from another
+
+Endpoint slices not being shared
+
+Remediation Steps:
+
+Verify Anthos Service Mesh is enabled:
+
+bash
+gcloud container hub mesh describe --project=PROJECT_ID
+Check istio status:
+
+bash
+kubectl get pods -n istio-system
+Validate mTLS configuration:
+
+bash
+kubectl get peerauthentication -n istio-system
+Multi-Cluster Service (MCS) Issues
+Scenario 8: MCS not exporting/importing services
+Symptoms:
+
+Services not visible across clusters
+
+ServiceImport resources not created
+
+Remediation Steps:
+
+Verify MCS is enabled:
+
+bash
+gcloud container hub multi-cluster-services describe --project=PROJECT_ID
+Check service export:
+
+bash
+kubectl get serviceexports -n NAMESPACE
+Validate service import:
+
+bash
+kubectl get serviceimports -n NAMESPACE
+Fleet Observability Problems
+Scenario 9: Metrics/logs not appearing in Cloud Monitoring
+Symptoms:
+
+Missing fleet metrics in Cloud Console
+
+GKE clusters not reporting to centralized dashboard
+
+Remediation Steps:
+
+Verify monitoring is enabled:
+
+bash
+gcloud container hub monitoring describe --project=PROJECT_ID
+Check collector pods:
+
+bash
+kubectl get pods -n google-sandbox
+Validate workload identity:
+
+bash
+kubectl get serviceaccounts -n google-sandbox
+Resource Quota and Limit Issues
+Scenario 10: Fleet operations hitting quota limits
+Symptoms:
+
+Errors about quota exceeded
+
+Inability to add more clusters
+
+Remediation Steps:
+
+Check current quotas:
+
+bash
+gcloud compute project-info describe --project PROJECT_ID
+Request quota increase:
+
+Navigate to IAM & Admin > Quotas in Cloud Console
+
+Filter for "GKE Hub API"
+
+Request increase for needed quotas
+
+Network Connectivity Between Clusters
+Scenario 11: Cross-cluster communication failures
+Symptoms:
+
+Pods in different clusters cannot communicate
+
+Network policies blocking traffic
+
+Remediation Steps:
+
+Verify cluster network configuration:
+
+Ensure VPC peering or VPN is properly configured
+
+Check firewall rules allow necessary traffic
+
+Validate network policies:
+
+bash
+kubectl get networkpolicies --all-namespaces
+Test connectivity:
+
+bash
+kubectl exec -it POD_NAME -- nc -zv REMOTE_SERVICE_IP PORT
