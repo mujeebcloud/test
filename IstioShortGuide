@@ -1,0 +1,172 @@
+# ======================================================
+# GOOGLE MANAGED SERVICE MESH (ASM) TROUBLESHOOTING GUIDE
+# GKE Edition - Complete CLI Reference
+# Last Updated: 2023-11-15
+# ======================================================
+
+# ----------------------------
+# 1. CONTROL PLANE (GOOGLE-MANAGED ISTIOD)
+# ----------------------------
+
+## 1.1 Verify Istiod Connectivity
+# Test connection from sidecar to Istiod
+kubectl exec <APP_POD> -c istio-proxy -- curl http://istiod.istio-system:15014/version
+
+# Expected: Returns Istio version (e.g., "1.16.2-asm.1")
+
+## 1.2 Check Config Sync Status
+# View ASM control plane health (Google-managed)
+gcloud alpha container fleet mesh describe --project <PROJECT_ID>
+
+# Key fields to check:
+# - membershipStates: Should show "READY"
+# - featureStates: All enabled features should be "ACTIVE"
+
+# ----------------------------
+# 2. DATA PLANE (ENVOY SIDECARS)
+# ----------------------------
+
+## 2.1 Verify Sidecar Injection
+# List pods WITHOUT sidecars in a namespace
+kubectl get pods -n <NAMESPACE> -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.containers[*].name}{"\n"}{end}' | grep -v istio-proxy
+
+# Fix missing injection:
+kubectl label namespace <NAMESPACE> istio-injection=enabled
+kubectl rollout restart deploy -n <NAMESPACE>
+
+## 2.2 Inspect Sidecar Health
+# Check Envoy readiness
+kubectl exec <APP_POD> -c istio-proxy -- curl -s http://localhost:15000/healthz/ready
+
+# Expected: "LIVE" (or errors if unhealthy)
+
+## 2.3 View Active Configuration
+# Dump full Envoy config (filter for specific sections)
+kubectl exec <APP_POD> -c istio-proxy -- curl http://localhost:15000/config_dump | jq '.configs[] | select(.@type=="type.googleapis.com/envoy.admin.v3.ListenersConfigDump")'
+
+# Pro Tip: Pipe to 'grep -A 30 "your_service"` to find specific routes
+
+# ----------------------------
+# 3. INGRESS GATEWAY
+# ----------------------------
+
+## 3.1 Check Gateway Deployment
+# Verify gateway pods
+kubectl get pods -n istio-system -l app=istio-ingressgateway
+
+# Expected: All pods "READY 2/2"
+
+## 3.2 Test External Connectivity
+# Get external IP
+export INGRESS_IP=$(kubectl get svc istio-ingressgateway -n istio-system -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+# Send test request
+curl -v -H "Host: example.com" http://$INGRESS_IP
+
+# Common responses:
+# - 200: Success
+# - 404: Check VirtualService/Gateway
+# - 503: Check backend services
+
+## 3.3 Inspect Gateway Metrics
+# View real-time metrics
+kubectl exec <GATEWAY_POD> -n istio-system -c istio-proxy -- curl http://localhost:15000/stats | grep -E 'upstream_rq_5xx|upstream_cx_connect_fail'
+
+# Key metrics:
+# - upstream_rq_5xx: Backend errors
+# - upstream_cx_connect_fail: Network issues
+
+# ----------------------------
+# 4. SECURITY (mTLS/RBAC)
+# ----------------------------
+
+## 4.1 Verify mTLS Mode
+# Check PeerAuthentication policy
+kubectl get peerauthentication -A
+
+# Modes:
+# - STRICT: Enforces mTLS
+# - PERMISSIVE: Allows plaintext (transition)
+
+## 4.2 Check Certificate Expiry
+# View cert validity
+kubectl exec <APP_POD> -c istio-proxy -- curl http://localhost:15000/certs | grep -A 2 "valid from"
+
+# Expected: Google-managed certs auto-rotate every 24h
+
+# ----------------------------
+# 5. TRAFFIC MANAGEMENT
+# ----------------------------
+
+## 5.1 Verify VirtualService Routes
+# Compare configured vs active routes
+kubectl get virtualservice <VS_NAME> -o yaml  # Configured
+kubectl exec <GATEWAY_POD> -n istio-system -c istio-proxy -- curl http://localhost:15000/routes  # Active
+
+## 5.2 Check Circuit Breakers
+# View active circuit-breaking
+kubectl exec <APP_POD> -c istio-proxy -- curl http://localhost:15000/stats | grep 'circuit_breakers'
+
+# Key metric:
+# upstream_rq_pending_overflow: Rejected requests
+
+# ----------------------------
+# 6. OBSERVABILITY
+# ----------------------------
+
+## 6.1 Access ASM Dashboards
+# Open Cloud Console dashboards
+gcloud alpha monitoring dashboards list --filter='Service Mesh'
+
+## 6.2 Query Logs for Errors
+# Filter sidecar errors
+gcloud logging read 'resource.type="k8s_container" resource.labels.container_name="istio-proxy" severity>=ERROR' --limit 100
+
+# Common errors:
+# - "RBAC denied"
+# - "TLS error"
+
+# ----------------------------
+# 7. ADVANCED TROUBLESHOOTING
+# ----------------------------
+
+## 7.1 Force Config Reload
+# Reload Envoy without restart
+kubectl exec <APP_POD> -c istio-proxy -- curl -X POST http://localhost:15000/reload
+
+## 7.2 Capture Network Traffic
+# Capture packets from sidecar
+kubectl exec <APP_POD> -c istio-proxy -- sudo tcpdump -i eth0 -w /tmp/capture.pcap
+kubectl cp <APP_POD>:/tmp/capture.pcap ./capture.pcap -c istio-proxy
+
+# Analyze with Wireshark or tshark
+
+# ======================================================
+# TROUBLESHOOTING FLOWCHART
+# ======================================================
+1. Start with symptom (e.g., 503 errors)
+2. Check gateway metrics (Section 3.3)
+3. Verify mTLS (Section 4)
+4. Inspect sidecar logs (Section 6.2)
+5. Escalate to GCP support if unresolved
+
+# ======================================================
+# KEY FILES TO INSPECT
+# ======================================================
+| Component       | Config File            | CLI Command                  |
+|-----------------|------------------------|------------------------------|
+| Sidecar Injection | Namespace label      | kubectl get ns <NS> -o yaml  |
+| Gateway         | Gateway resource      | kubectl get gateway -A       |
+| Traffic Routing | VirtualService/DR     | kubectl get vs,dr -A         |
+
+# ======================================================
+# PRO TIPS
+# ======================================================
+1. Always check logs first:
+   kubectl logs <POD> -c istio-proxy | grep -i error
+
+2. Compare configs:
+   istioctl proxy-config routes <POD> -o json
+
+3. Use GCP diagnostics:
+   gcloud alpha container fleet mesh describe
