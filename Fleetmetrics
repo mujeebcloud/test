@@ -1,0 +1,182 @@
+# ======================================================
+# ISTIO (ISTIOD) MONITORING GUIDE FOR AKS WITH DATADOG
+# Critical Metrics, Alerts, and Dashboards
+# Last Updated: 2023-11-15
+# ======================================================
+
+# ----------------------------
+# 1. CORE ISTIOD METRICS TO MONITOR
+# ----------------------------
+
+## 1.1 Control Plane Health
+### Metric: istiod_requests_total
+# Datadog Query:
+sum by(response_code) (rate(istiod_requests_total{cluster_name="$YOUR_CLUSTER"}[5m]))
+
+# Alert Condition:
+avg(last_5m):sum:istiod.requests_total{response_code:5xx} / sum:istiod.requests_total{*} > 0.05
+
+# Response: Check Istiod logs for API errors
+
+### Metric: pilot_xds_push_timeouts
+# Datadog Query:
+sum(rate(pilot_xds_push_timeouts{cluster_name="$YOUR_CLUSTER"}[5m]))
+
+# Alert Threshold:
+> 5/minute
+
+# Response: Investigate sidecar connectivity issues
+
+## 1.2 Configuration Sync
+### Metric: pilot_xds_push_errors
+# Datadog Query:
+sum(rate(pilot_xds_push_errors{cluster_name="$YOUR_CLUSTER"}[5m]))
+
+# Alert Condition:
+sum(last_5m):sum:istiod.pilot.xds.push_errors{*} > 0
+
+# Response: Validate VirtualService/DestinationRule YAMLs
+
+# ----------------------------
+# 2. RESOURCE UTILIZATION
+# ----------------------------
+
+## 2.1 Memory Pressure
+# Datadog Query:
+sum(container_memory_usage_bytes{container="istiod", cluster_name="$YOUR_CLUSTER"}) by (pod)
+
+# Alert Threshold:
+> 90% of limit for 15m
+
+## 2.2 CPU Throttling
+# Datadog Query:
+rate(container_cpu_usage_seconds_total{container="istiod", cluster_name="$YOUR_CLUSTER"}[5m])
+
+# Alert Threshold:
+> 80% for 20m
+
+# ----------------------------
+# 3. SECURITY METRICS
+# ----------------------------
+
+## 3.1 Certificate Issues
+### Metric: citrusleaf_secret_rotation_errors_total
+# Datadog Query:
+sum(rate(citrusleaf_secret_rotation_errors_total{cluster_name="$YOUR_CLUSTER"}[5m]))
+
+# Alert Condition:
+sum(last_15m):sum:istiod.citrusleaf.secret_rotation_errors{*} > 0
+
+# Response: Check Istiod certificate logs
+
+## 3.2 Authentication Failures
+### Metric: istio_authentication_failure
+# Datadog Query:
+sum(rate(istio_authentication_failure{cluster_name="$YOUR_CLUSTER"}[5m]))
+
+# Alert Threshold:
+> 0
+
+# ----------------------------
+# 4. DATADOG DASHBOARD SETUP
+# ----------------------------
+
+## Recommended Dashboard JSON:
+{
+  "title": "Istio Control Plane (AKS)",
+  "widgets": [
+    {
+      "definition": {
+        "type": "timeseries",
+        "requests": [
+          {
+            "q": "sum(rate(pilot_xds_pushes{cluster_name:$cluster}[5m]))",
+            "display_type": "line"
+          }
+        ],
+        "title": "Config Push Rate"
+      }
+    },
+    {
+      "definition": {
+        "type": "toplist",
+        "requests": [
+          {
+            "q": "sum(container_memory_usage_bytes{container='istiod', cluster_name:$cluster} by (pod)",
+            "conditional_formats": [
+              {
+                "comparator": ">",
+                "value": 90,
+                "palette": "red_on_white"
+              }
+            ]
+          }
+        ],
+        "title": "Memory Usage by Pod"
+      }
+    }
+  ],
+  "template_variables": [
+    {
+      "name": "cluster",
+      "default": "$YOUR_CLUSTER"
+    }
+  ]
+}
+
+# ----------------------------
+# 5. CRITICAL ALERTS
+# ----------------------------
+
+## Alert 1: Istiod Unavailable
+# Datadog Monitor Query:
+avg(last_5m):sum:istiod.up{cluster_name:$YOUR_CLUSTER} < 1
+
+# Notification:
+- PagerDuty: Critical
+- Slack: #istio-alerts
+
+## Alert 2: High Push Errors
+# Datadog Monitor Query:
+sum(last_5m):sum:istiod.pilot.xds.push_errors{cluster_name:$YOUR_CLUSTER} > 5
+
+# Notification:
+- Email: team@yourcompany.com
+- Slack: #istio-warnings
+
+# ----------------------------
+# 6. TROUBLESHOOTING GUIDE
+# ----------------------------
+
+## Step 1: Check Istiod Logs
+kubectl logs -n istio-system -l app=istiod --tail=100 | grep -i error
+
+## Step 2: Verify Sidecar Sync
+istioctl proxy-status | grep -v SYNCED
+
+## Step 3: Inspect Datadog Traces
+service:istio operation_name:"istiod.*" status:error
+
+## Step 4: Check Azure Infrastructure
+az monitor metrics list --resource $ISTIOD_RESOURCE_ID --metric "CPU Usage"
+
+# ----------------------------
+# 7. PRO TIPS
+# ----------------------------
+
+1. Tag all metrics with:
+   - cluster_name
+   - namespace
+   - environment (prod/staging)
+   
+2. Baseline metrics during normal operation before setting thresholds
+
+3. Use Datadog's Istio integration:
+   https://docs.datadoghq.com/integrations/istio/
+
+4. Correlate with AKS node metrics:
+   container_cpu_usage_seconds_total{node_name=~".+"}
+
+# ======================================================
+# END OF GUIDE
+# ======================================================
