@@ -1,0 +1,80 @@
+GKE Performance Troubleshooting with kubectl
+============================================
+
+Node Level
+----------
+# List all nodes with status
+kubectl get nodes -o wide
+
+# Describe a specific node (CPU, memory allocatable, conditions, taints)
+kubectl describe node <node-name>
+
+# Get node resource usage (requires metrics-server)
+kubectl top node
+
+# Check events for node issues (disk pressure, memory pressure, network)
+kubectl get events --field-selector involvedObject.kind=Node --sort-by=.lastTimestamp
+
+
+Pod Level
+---------
+# List all pods with their nodes and status
+kubectl get pods -o wide
+
+# Describe a specific pod (scheduling issues, restart counts, events)
+kubectl describe pod <pod-name> -n <namespace>
+
+# Get pod resource usage (CPU, memory)
+kubectl top pod -n <namespace>
+
+# Get pod logs (to check for app errors / crashes)
+kubectl logs <pod-name> -n <namespace>
+
+# Stream pod logs in real-time
+kubectl logs -f <pod-name> -n <namespace>
+
+# Check if pod is stuck in pending and why
+kubectl get events --field-selector involvedObject.kind=Pod -n <namespace> --sort-by=.lastTimestamp
+
+
+Container Level
+----------------
+# Check resource usage per container
+kubectl top pod <pod-name> --containers -n <namespace>
+
+# View container logs
+kubectl logs <pod-name> -c <container-name> -n <namespace>
+
+# Exec into a container for debugging
+kubectl exec -it <pod-name> -c <container-name> -n <namespace> -- /bin/sh
+
+# Check restart count (indicates crash loops or OOM kills)
+kubectl get pod <pod-name> -n <namespace> -o=jsonpath='{.status.containerStatuses[*].restartCount}'
+
+
+Cluster-Wide Insights
+----------------------
+# Show all resource usage across cluster (requires metrics-server)
+kubectl top pods --all-namespaces
+kubectl top nodes
+
+# Check if cluster autoscaler events are happening
+kubectl get events --all-namespaces | grep -i scale
+
+
+Common Bottleneck Indicators
+-----------------------------
+1. High CPU / Memory on Nodes
+   - kubectl top node
+   - Look for nodes >80% usage.
+
+2. Pods in CrashLoopBackOff or OOMKilled
+   - kubectl describe pod <pod-name>
+   - kubectl get pod <pod-name> -o jsonpath='{.status.containerStatuses[*].lastState}'
+
+3. Pending Pods due to Scheduling Issues
+   - Check with kubectl describe pod → Events will show "Insufficient CPU" or "Insufficient memory".
+
+4. Networking Issues
+   - kubectl describe pod <pod> (look for NetworkPluginNotReady)
+   - Check kubectl get svc,ep -n <namespace> for missing endpoints
